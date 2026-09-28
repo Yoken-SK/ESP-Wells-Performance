@@ -217,4 +217,4 @@ if all_wells_data:
             y=df_well[cfg["col"]], 
             mode='lines+markers', 
             name=param, 
-            yaxis="y2" if is_y2 else "y",
+            yaxis="y2" if is_y2 else "y",)
