@@ -54,7 +54,7 @@ if uploaded_file is not None:
                     continue
                 target_day_col = day_col_candidates
                 
-                # Deteksi Bulan & Tahu Cadangan dari Metadata
+                # Deteksi Bulan & Tahun Cadangan dari Metadata
                 detected_month = 9
                 detected_year = 2026
                 for idx, row in df_raw_full.iloc[:header_row_idx].iterrows():
@@ -79,22 +79,29 @@ if uploaded_file is not None:
                             return pd.to_numeric(df_table[c], errors='coerce')
                     return pd.Series(default_val, index=df_table.index)
                 
-                # Ekstraksi Parameter Lapangan
-                df_clean['Oil_Rate_BOPD'] = find_and_parse_flexible(['oilbopd', 'bopd', 'oil', 'bop']).fillna(0)
-                df_clean['Water_Rate_BWPD'] = find_and_parse_flexible(['waterbwpd', 'bwpd', 'water', 'bwp']).fillna(0)
+                # Ekstraksi Parameter Lapangan (Dipaksa konversi ke NaN jika berisi teks eror/kosong)
+                df_clean['Oil_Rate_BOPD'] = find_and_parse_flexible(['oilbopd', 'bopd', 'oil', 'bop'])
+                df_clean['Water_Rate_BWPD'] = find_and_parse_flexible(['waterbwpd', 'bwpd', 'water', 'bwp'])
                 df_clean['Water_Cut_Percent'] = find_and_parse_flexible(['watercut', 'wc%', 'wc']).fillna(0)
                 df_clean['Gas_Rate_MSCFD'] = find_and_parse_flexible(['agfmcfd', 'mcfd', 'gas', 'agf', 'gascf']).fillna(0)
                 
-                df_clean['PI_PSI'] = find_and_parse_flexible(['pintake', 'pip', 'intake', 'pintakepsi', 'p.intake']).ffill().bfill().fillna(0)
-                df_clean['PD_PSI'] = find_and_parse_flexible(['pdischarge', 'pdp', 'discharge', 'pdischargepsi', 'p.discharge']).ffill().bfill().fillna(0)
+                df_clean['PI_PSI'] = find_and_parse_flexible(['pintake', 'pip', 'intake', 'pintakepsi', 'p.intake'])
+                df_clean['PD_PSI'] = find_and_parse_flexible(['pdischarge', 'pdp', 'discharge', 'pdischargepsi', 'p.discharge'])
                 df_clean['Frequency_Hz'] = find_and_parse_flexible(['freqhz', 'hz', 'freq', 'vsd'], default_val=40).ffill().bfill().fillna(40)
                 
                 df_clean['Raw_Day'] = df_table[target_day_col]
                 
-                # Pangkas baris sisa penutup di ujung paling bawah lembar excel
+                # Membersihkan baris penutup atau baris kosong ilegal agar skala grafik downhole tidak terganggu
+                df_clean = df_clean.dropna(subset=['Oil_Rate_BOPD', 'Water_Rate_BWPD'], how='all')
+                
+                # Lakukan interpolasi pintar (ffill/bfill) khusus untuk data PI/PD setelah baris teks pengganggu dibuang
+                df_clean['PI_PSI'] = df_clean['PI_PSI'].ffill().bfill().fillna(0)
+                df_clean['PD_PSI'] = df_clean['PD_PSI'].ffill().bfill().fillna(0)
+                df_clean['Oil_Rate_BOPD'] = df_clean['Oil_Rate_BOPD'].fillna(0)
+                df_clean['Water_Rate_BWPD'] = df_clean['Water_Rate_BWPD'].fillna(0)
+                
                 df_clean['Valid_Check'] = df_clean['Oil_Rate_BOPD'] + df_clean['Water_Rate_BWPD'] + df_clean['PI_PSI']
                 df_clean = df_clean[df_clean['Valid_Check'] > 0]
-                df_clean = df_clean[(df_clean['Oil_Rate_BOPD'] != 0) | (df_clean['Water_Rate_BWPD'] != 0) | (df_clean['PI_PSI'] != 0)]
                 
                 if df_clean.empty:
                     continue
@@ -162,29 +169,25 @@ if all_wells_data:
     # ==========================================
     st.subheader("📈 Grafik Tren Produksi Sumur")
     
+    prod_config = {
+        "Oil Rate (BOPD)": {"col": "Oil_Rate_BOPD", "color": "green", "y": "y", "dash": "solid"},
+        "Water Rate (BWPD)": {"col": "Water_Rate_BWPD", "color": "blue", "y": "y", "dash": "solid"},
+        "Gas Rate (MCFD)": {"col": "Gas_Rate_MSCFD", "color": "red", "y": "y2", "dash": "dash"}
+    }
+    
     selected_prod = st.multiselect(
         "Pilih Parameter Produksi yang Ingin Ditampilkan pada Grafik:",
-        options=["Oil Rate (BOPD)", "Water Rate (BWPD)", "Gas Rate (MCFD)"],
+        options=list(prod_config.keys()),
         default=["Oil Rate (BOPD)", "Water Rate (BWPD)", "Gas Rate (MCFD)"]
     )
     
     fig_prod = go.Figure()
-    
-    if "Oil Rate (BOPD)" in selected_prod: fig_prod.add_trace(go.Scatter(x=df_well['Date'], y=df_well['Oil_Rate_BOPD'], mode='lines+markers', name='Oil Rate (BOPD)', line=dict(color='green', width=2.5)))
-    if "Water Rate (BWPD)" in selected_prod: fig_prod.add_trace(go.Scatter(x=df_well['Date'], y=df_well['Water_Rate_BWPD'], mode='lines+markers', name='Water Rate (BWPD)', line=dict(color='blue', width=2)))
-    if "Gas Rate (MCFD)" in selected_prod: fig_prod.add_trace(go.Scatter(x=df_well['Date'], y=df_well['Gas_Rate_MSCFD'], mode='lines+markers', name='Gas Rate (MCFD)', yaxis="y2", line=dict(color='red', width=2, dash='dash')))
+    for k in selected_prod:
+        cfg = prod_config[k]
+        fig_prod.add_trace(go.Scatter(x=df_well['Date'], y=df_well[cfg["col"]], mode='lines+markers', name=k, yaxis=cfg["y"], line=dict(color=cfg["color"], width=2, dash=cfg["dash"])))
         
     fig_prod.update_layout(
         xaxis=dict(title="Tanggal"),
         yaxis=dict(title="Liquid Rate (BOPD / BWPD)", autorange=True),
         yaxis2=dict(title="Gas Rate (MCFD)", overlaying="y", side="right", autorange=True, matches=None),
         hovermode="x unified",
-        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1)
-    )
-    st.plotly_chart(fig_prod, use_container_width=True)
-    
-    st.markdown("---")
-    
-    # ==========================================
-    # 5. GRAFIK DOWNHOLE PARAMETER (INTEGRASI PENUH PI & PD DENGAN FLAT SINGLE-LINE)
-    # ==========================================
