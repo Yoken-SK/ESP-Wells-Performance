@@ -70,7 +70,7 @@ if uploaded_file is not None:
                     continue
                 
                 # --- EKSTRAKSI NAMA SUMUR ---
-                well_name_derived = sheet.split(' ')[0].strip()
+                well_name_derived = sheet.replace('Monitoring', '').replace('monitoring', '').strip()
                 for idx, row in df_raw_full.iloc[:header_row_idx].iterrows():
                     row_cells = [str(x).strip() for x in row.values if pd.notnull(x)]
                     for cell_text in row_cells:
@@ -105,7 +105,7 @@ if uploaded_file is not None:
                 df_clean['Motor_Temp_C'] = 95.0
                 df_clean['Vibration_G'] = 1.2
                 
-                # Hilangkan baris data kosong kritikal agar skala grafik naik
+                # Filter data valid agar grafik skala otomatisnya bekerja sempurna
                 df_clean = df_clean[(df_clean['Oil_Rate_BOPD'] > 0) | (df_clean['PI_PSI'] > 0)]
                 
                 if not df_clean.empty:
@@ -145,76 +145,53 @@ if all_wells_data:
     st.markdown("---")
     
     # ==========================================
-    # 4. GRAFIK TREN PRODUKSI
+    # 4. GRAFIK TREN PRODUKSI (MENGGUNAKAN PLOTLY EXPRESS YANG RINGKAS)
     # ==========================================
     st.subheader("📈 Grafik Tren Produksi Sumur")
     
-    prod_options = {
-        "Oil Rate (BOPD)": {"col": "Oil_Rate_BOPD", "color": "green", "axis": "y1", "dash": "solid"},
-        "Water Rate (BWPD)": {"col": "Water_Rate_BWPD", "color": "blue", "axis": "y1", "dash": "solid"},
-        "Gas Rate (MCFD)": {"col": "Gas_Rate_MSCFD", "color": "red", "axis": "y2", "dash": "dash"}
-    }
+    # Mapping Pilihan ke Kolom Asli Dataframe
+    prod_mapping = {"Oil Rate (BOPD)": "Oil_Rate_BOPD", "Water Rate (BWPD)": "Water_Rate_BWPD", "Gas Rate (MCFD)": "Gas_Rate_MSCFD"}
     
-    selected_prod_params = st.multiselect(
+    selected_prod = st.multiselect(
         "Pilih Parameter Produksi yang Ingin Ditampilkan pada Grafik:",
-        options=list(prod_options.keys()),
+        options=list(prod_mapping.keys()),
         default=["Oil Rate (BOPD)", "Water Rate (BWPD)"]
     )
     
-    fig_prod = go.Figure()
-    use_prod_y2 = False
-    
-    for param in selected_prod_params:
-        cfg = prod_options[param]
-        is_y2 = (cfg["axis"] == "y2")
-        fig_prod.add_trace(go.Scatter(
-            x=df_well['Date'], 
-            y=df_well[cfg["col"]], 
-            mode='lines+markers', 
-            name=param, 
-            yaxis="y2" if is_y2 else "y",
-            line=dict(color=cfg["color"], width=2, dash=cfg["dash"])
-        ))
-        if is_y2:
-            use_prod_y2 = True
-            
-    prod_layout = {
-        "xaxis": dict(title="Tanggal"),
-        "yaxis": dict(title="Liquid Rate (BOPD / BWPD)", autorange=True),
-        "hovermode": "x unified"
-    }
-    if use_prod_y2:
-        prod_layout["yaxis2"] = dict(title="Gas Rate (MCFD)", overlaying="y", side="right", autorange=True)
+    if selected_prod:
+        # Mengubah data ke format panjang (melt) agar Plotly Express bisa memplot secara otomatis tanpa error spasi
+        cols_to_plot = [prod_mapping[p] for p in selected_prod]
+        df_melted_prod = df_well.melt(id_vars=['Date'], value_vars=cols_to_plot, var_name='Parameter', value_name='Rate Value')
         
-    fig_prod.update_layout(**prod_layout)
-    st.plotly_chart(fig_prod, use_container_width=True)
+        # Membuat grafik garis dalam 1 baris kode tunggal yang sangat aman
+        fig_prod = px.line(df_melted_prod, x='Date', y='Rate Value', color='Parameter', markers=True, title="Historical Production Trend")
+        fig_prod.update_layout(xaxis_title="Tanggal", yaxis_title="Rate Value", hovermode="x unified")
+        fig_prod.update_yaxes(autorange=True)
+        st.plotly_chart(fig_prod, use_container_width=True)
+    else:
+        st.warning("Silakan pilih minimal satu parameter produksi.")
+        
+    st.markdown("---")
     
     # ==========================================
-    # 5. GRAFIK DOWNHOLE DENGAN FITUR MULTISELECT
+    # 5. GRAFIK DOWNHOLE PARAMETER (MENGGUNAKAN PLOTLY EXPRESS YANG RINGKAS)
     # ==========================================
     st.subheader("⚙️ Visualisasi Tren Downhole & ESP Parameter")
     
-    downhole_options = {
-        "Pump Intake Pressure (PI)": {"col": "PI_PSI", "color": "purple", "axis": "y1"},
-        "Pump Discharge Pressure (PD)": {"col": "PD_PSI", "color": "teal", "axis": "y1"},
-        "VSD Frequency": {"col": "Frequency_Hz", "color": "darkblue", "axis": "y2"}
-    }
+    # Mapping Pilihan ke Kolom Asli Dataframe
+    dh_mapping = {"Pump Intake Pressure (PI)": "PI_PSI", "Pump Discharge Pressure (PD)": "PD_PSI", "VSD Frequency": "Frequency_Hz"}
     
-    selected_params = st.multiselect(
+    selected_dh = st.multiselect(
         "Pilih Parameter Downhole yang Ingin Ditampilkan:",
-        options=list(downhole_options.keys()),
+        options=list(dh_mapping.keys()),
         default=["Pump Intake Pressure (PI)", "Pump Discharge Pressure (PD)"]
     )
     
-    fig_downhole = go.Figure()
-    use_dh_y2 = False
-    
-    for param in selected_params:
-        cfg = downhole_options[param]
-        is_y2 = (cfg["axis"] == "y2")
-        fig_downhole.add_trace(go.Scatter(
-            x=df_well['Date'], 
-            y=df_well[cfg["col"]], 
-            mode='lines+markers', 
-            name=param, 
-            yaxis="y2" if is_y2 else "y",)
+    if selected_dh:
+        # Mengubah data ke format panjang (melt)
+        cols_dh_to_plot = [dh_mapping[p] for p in selected_dh]
+        df_melted_dh = df_well.melt(id_vars=['Date'], value_vars=cols_dh_to_plot, var_name='Parameter', value_name='Value')
+        
+        # Membuat grafik garis downhole dalam 1 baris kode tunggal yang sangat aman
+        fig_downhole = px.line(df_melted_dh, x='Date', y='Value', color='Parameter', markers=True, title="Downhole Parameters Trend")
+        fig_downhole.update_layout(xaxis_title="Tanggal", yaxis_title="Value (PSI / Hz)", hovermode="x unified")
