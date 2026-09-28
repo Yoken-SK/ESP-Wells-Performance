@@ -75,28 +75,55 @@ if uploaded_file is not None:
                             except:
                                 pass
                 
-                # --- SISTEM PARSING TANGGAL UNIVERSAL CERDAS ---
+                # --- PEMETAAN (MAPPING) KOLOM SECARA DIKUNCI ---
+                df_clean = pd.DataFrame()
+                
+                def find_and_parse_flexible(keywords, default_val=np.nan):
+                    for c in df_table.columns:
+                        clean_col_name = c.lower().replace(' ', '').replace('\n', '')
+                        if any(k.lower().replace(' ', '') in clean_col_name for k in keywords):
+                            return pd.to_numeric(df_table[c], errors='coerce')
+                    return pd.Series(default_val, index=df_table.index)
+                
+                # Ekstraksi Parameter Angka Utama
+                df_clean['Oil_Rate_BOPD'] = find_and_parse_flexible(['oilbopd', 'bopd', 'oil', 'bop']).fillna(0)
+                df_clean['Water_Rate_BWPD'] = find_and_parse_flexible(['waterbwpd', 'bwpd', 'water', 'bwp']).fillna(0)
+                df_clean['Water_Cut_Percent'] = find_and_parse_flexible(['watercut', 'wc%', 'wc']).fillna(0)
+                df_clean['Gas_Rate_MSCFD'] = find_and_parse_flexible(['agfmcfd', 'mcfd', 'gas', 'agf', 'gascf']).fillna(0)
+                
+                df_clean['PI_PSI'] = find_and_parse_flexible(['pintake', 'pip', 'intake', 'pintakepsi', 'p.intake']).ffill().bfill().fillna(0)
+                df_clean['PD_PSI'] = find_and_parse_flexible(['pdischarge', 'pdp', 'discharge', 'pdischargepsi', 'p.discharge']).ffill().bfill().fillna(0)
+                df_clean['Frequency_Hz'] = find_and_parse_flexible(['freqhz', 'hz', 'freq', 'vsd'], default_val=40).ffill().bfill().fillna(40)
+                
+                # Masukkan kolom tanggal mentah ke penampung bersih
+                df_clean['Raw_Day'] = df_table[target_day_col]
+                
+                # --- FILTER BARIS AKTIF: MENGGUNAKAN INDIKATOR PRODUKSI CAIRAN (FLUID RATE) ---
+                # Memastikan baris yang diambil hanya baris yang memuat record angka fluida, bukan sub-header unit teks
+                df_clean['Liquid_Total'] = df_clean['Oil_Rate_BOPD'] + df_clean['Water_Rate_BWPD'] + df_clean['PI_PSI']
+                df_clean = df_clean[df_clean['Liquid_Total'] > 0]
+                
+                if df_clean.empty:
+                    continue
+                
+                # --- PERBAIKAN GENERASI TANGGAL TAHAP AKHIR ---
                 def parse_date_smart(val):
-                    if pd.isnull(val):
-                        return pd.NaT
-                    
                     val_str = str(val).strip()
-                    # Kasus A: Jika kolom berisi angka hari murni (1 sampai 31)
                     if val_str.isdigit() and 1 <= int(val_str) <= 31:
                         return pd.to_datetime(f"{detected_year}-{detected_month:02d}-{int(val_str):02d}", errors='coerce')
-                    
-                    # Kasus B: Jika kolom sudah berupa format tanggal lengkap (teks atau objek timestamp)
                     parsed = pd.to_datetime(val, errors='coerce')
                     if pd.notnull(parsed):
                         return parsed
-                        
                     return pd.NaT
 
-                df_table['Clean_Date'] = df_table[target_day_col].apply(parse_date_smart)
-                df_table = df_table.dropna(subset=['Clean_Date'])
+                df_clean['Date'] = df_clean['Raw_Day'].apply(parse_date_smart)
                 
-                if df_table.empty:
-                    continue
+                # Jika parsing gagal total, buatkan urutan tanggal artifisial harian teratur agar grafik tidak patah
+                if df_clean['Date'].isnull().all():
+                    start_artifisial = pd.to_datetime(f"{detected_year}-{detected_month:02d}-01", errors='coerce')
+                    df_clean['Date'] = [start_artifisial + pd.Timedelta(days=i) for i in range(len(df_clean))]
+                else:
+                    df_clean['Date'] = df_clean['Date'].ffill().bfill()
                 
                 # --- EKSTRAKSI NAMA SUMUR ---
                 well_name_derived = sheet.replace('Monitoring', '').replace('monitoring', '').strip()
@@ -106,40 +133,18 @@ if uploaded_file is not None:
                         if 'well name' in cell_text.lower() or 'sumur' in cell_text.lower():
                             well_name_derived = row_cells[-1].replace(':', '').strip()
                 
-                # --- PEMETAAN (MAPPING) KOLOM ---
-                df_clean = pd.DataFrame()
-                df_clean['Date'] = df_table['Clean_Date']
                 df_clean['Well_Name'] = well_name_derived
-                
-                def find_and_parse_flexible(keywords, default_val=np.nan):
-                    for c in df_table.columns:
-                        clean_col_name = c.lower().replace(' ', '').replace('\n', '')
-                        if any(k.lower().replace(' ', '') in clean_col_name for k in keywords):
-                            return pd.to_numeric(df_table[c], errors='coerce')
-                    return pd.Series(default_val, index=df_table.index)
-                
-                # Ekstraksi Parameter Laju Produksi
-                df_clean['Oil_Rate_BOPD'] = find_and_parse_flexible(['oilbopd', 'bopd', 'oil', 'bop']).fillna(0)
-                df_clean['Water_Rate_BWPD'] = find_and_parse_flexible(['waterbwpd', 'bwpd', 'water', 'bwp']).fillna(0)
-                df_clean['Water_Cut_Percent'] = find_and_parse_flexible(['watercut', 'wc%', 'wc']).fillna(0)
-                df_clean['Gas_Rate_MSCFD'] = find_and_parse_flexible(['agfmcfd', 'mcfd', 'gas', 'agf', 'gascf']).fillna(0)
-                
-                # Ekstraksi Parameter Tekanan Pompa Downhole & Freq
-                df_clean['PI_PSI'] = find_and_parse_flexible(['pintake', 'pip', 'intake', 'pintakepsi', 'p.intake']).ffill().bfill().fillna(0)
-                df_clean['PD_PSI'] = find_and_parse_flexible(['pdischarge', 'pdp', 'discharge', 'pdischargepsi', 'p.discharge']).ffill().bfill().fillna(0)
-                df_clean['Frequency_Hz'] = find_and_parse_flexible(['freqhz', 'hz', 'freq', 'vsd'], default_val=40).ffill().bfill().fillna(40)
-                
-                # Parameter Tambahan
                 df_clean['Motor_Temp_C'] = 95.0
                 df_clean['Vibration_G'] = 1.2
                 
-                if not df_clean.empty:
-                    all_wells_data[well_name_derived] = df_clean.sort_values('Date')
+                # Pilih kolom final untuk disimpan
+                df_final = df_clean[['Date', 'Well_Name', 'Oil_Rate_BOPD', 'Water_Rate_BWPD', 'Water_Cut_Percent', 'Gas_Rate_MSCFD', 'PI_PSI', 'PD_PSI', 'Frequency_Hz', 'Motor_Temp_C', 'Vibration_G']]
+                all_wells_data[well_name_derived] = df_final.sort_values('Date')
                 
             if all_wells_data:
                 st.sidebar.success(f"Berhasil memuat {len(all_wells_data)} Sumur Monitoring!")
             else:
-                st.sidebar.error("Format data tabel tidak sesuai dengan kolom laju produksi atau tekanan pompa.")
+                st.sidebar.error("Gagal mengekstrak tabel data terstruktur dari sheet monitoring.")
                 
     except Exception as e:
         st.sidebar.error(f"Eror pembacaan file: {e}")
@@ -181,19 +186,3 @@ if all_wells_data:
     }
     
     selected_prod = st.multiselect(
-        "Pilih Parameter Produksi yang Ingin Ditampilkan pada Grafik:",
-        options=list(prod_config.keys()),
-        default=["Oil Rate (BOPD)", "Water Rate (BWPD)"]
-    )
-    
-    fig_prod = go.Figure()
-    
-    for k in selected_prod:
-        cfg = prod_config[k]
-        fig_prod.add_trace(go.Scatter(x=df_well['Date'], y=df_well[cfg["col"]], mode='lines+markers', name=k, yaxis=cfg["y"], line=dict(color=cfg["color"], width=2, dash=cfg["dash"])))
-        
-    fig_prod.update_layout(
-        xaxis=dict(title="Tanggal"),
-        yaxis=dict(title="Liquid Rate (BOPD / BWPD)", autorange=True),
-        yaxis2=dict(title="Gas Rate (MCFD)", overlaying="y", side="right", autorange=True),
-        hovermode="x unified",
