@@ -136,12 +136,14 @@ with tab1:
                         name='Intake Press (PSI)', yaxis='y2', line=dict(color='purple')))
     
     # Layout untuk Dual Axis (Sumbu Y Ganda)
+      # Layout untuk Dual Axis (Sumbu Y Ganda)
     fig_tp.update_layout(
         yaxis=dict(title='Motor Temperature (°C)', titlefont=dict(color='orange'), tickfont=dict(color='orange')),
         yaxis2=dict(title='Intake Pressure (PSI)', titlefont=dict(color='purple'), tickfont=dict(color='purple'),
                     overlaying='y', side='right'),
         hovermode='x unified'
     )
+    
     st.plotly_chart(fig_tp, use_container_width=True)
 
 with tab2:
