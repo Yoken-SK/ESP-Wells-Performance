@@ -42,7 +42,7 @@ if uploaded_file is not None:
                 header_row_idx = None
                 for idx, row in df_raw_full.iterrows():
                     row_str = [str(x).strip().lower() for x in row.values if pd.notnull(x)]
-                    if 'day' in row_str or 'hari' in row_str:
+                    if 'day' in row_str or 'hari' in row_str or 'date' in row_str:
                         header_row_idx = idx
                         break
                 
@@ -53,20 +53,18 @@ if uploaded_file is not None:
                 df_table = pd.read_excel(uploaded_file, sheet_name=sheet, skiprows=header_row_idx)
                 df_table.columns = df_table.columns.str.strip().str.replace('\n', ' ').str.replace('  ', ' ')
                 
-                # Cari kolom tanggal (Day)
-                day_col_candidates = [c for c in df_table.columns if 'day' in c.lower() or 'date' in c.lower() or 'tgl' in c.lower()]
+                # Cari kolom tanggal (Day/Date)
+                day_col_candidates = [c for c in df_table.columns if 'day' in c.lower() or 'date' in c.lower() or 'tgl' in c.lower() or 'time' in c.lower()]
                 if not day_col_candidates:
                     continue
                 target_day_col = day_col_candidates[0]
                 
-                # --- DETEKSI BULAN & TAHUN DARI METADATA ATAS ---
+                # --- DETEKSI BULAN & TAHUN CADANGAN DARI METADATA ---
                 detected_month = 9
                 detected_year = 2026
-                
                 for idx, row in df_raw_full.iloc[:header_row_idx].iterrows():
                     row_cells = [str(x).strip() for x in row.values if pd.notnull(x)]
                     for cell_text in row_cells:
-                        # Mencari pola teks tanggal seperti "February 11, 2026" atau "August 20, 2026"
                         match = re.search(r'([A-Za-z]+)\s+(\d{1,2}),\s+(\d{4})', cell_text)
                         if match:
                             try:
@@ -77,16 +75,24 @@ if uploaded_file is not None:
                             except:
                                 pass
                 
-                # --- PERBAIKAN GENERASI TANGGAL ---
-                # Bersihkan kolom Day agar hanya berisi angka integer murni
-                df_table['Clean_Day_Num'] = pd.to_numeric(df_table[target_day_col], errors='coerce')
-                df_table = df_table.dropna(subset=['Clean_Day_Num'])
-                df_table['Clean_Day_Num'] = df_table['Clean_Day_Num'].astype(int)
-                
-                # Buat format tanggal lengkap gabungan (Tahun - Bulan - Hari)
-                df_table['Clean_Date'] = df_table['Clean_Day_Num'].apply(
-                    lambda d: pd.to_datetime(f"{detected_year}-{detected_month:02d}-{d:02d}", errors='coerce')
-                )
+                # --- SISTEM PARSING TANGGAL UNIVERSAL CERDAS ---
+                def parse_date_smart(val):
+                    if pd.isnull(val):
+                        return pd.NaT
+                    
+                    val_str = str(val).strip()
+                    # Kasus A: Jika kolom berisi angka hari murni (1 sampai 31)
+                    if val_str.isdigit() and 1 <= int(val_str) <= 31:
+                        return pd.to_datetime(f"{detected_year}-{detected_month:02d}-{int(val_str):02d}", errors='coerce')
+                    
+                    # Kasus B: Jika kolom sudah berupa format tanggal lengkap (teks atau objek timestamp)
+                    parsed = pd.to_datetime(val, errors='coerce')
+                    if pd.notnull(parsed):
+                        return parsed
+                        
+                    return pd.NaT
+
+                df_table['Clean_Date'] = df_table[target_day_col].apply(parse_date_smart)
                 df_table = df_table.dropna(subset=['Clean_Date'])
                 
                 if df_table.empty:
@@ -133,7 +139,7 @@ if uploaded_file is not None:
             if all_wells_data:
                 st.sidebar.success(f"Berhasil memuat {len(all_wells_data)} Sumur Monitoring!")
             else:
-                st.sidebar.error("Gagal mengekstrak tabel data terstruktur dari sheet monitoring.")
+                st.sidebar.error("Format data tabel tidak sesuai dengan kolom laju produksi atau tekanan pompa.")
                 
     except Exception as e:
         st.sidebar.error(f"Eror pembacaan file: {e}")
@@ -191,10 +197,3 @@ if all_wells_data:
         yaxis=dict(title="Liquid Rate (BOPD / BWPD)", autorange=True),
         yaxis2=dict(title="Gas Rate (MCFD)", overlaying="y", side="right", autorange=True),
         hovermode="x unified",
-        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1)
-    )
-    st.plotly_chart(fig_prod, use_container_width=True)
-    
-    st.markdown("---")
-    
-    # ==========================================
