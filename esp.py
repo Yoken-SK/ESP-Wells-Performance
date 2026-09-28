@@ -56,7 +56,7 @@ if uploaded_file is not None:
                 day_col_candidates = [c for c in df_table.columns if 'day' in c.lower() or 'date' in c.lower() or 'tgl' in c.lower()]
                 if not day_col_candidates:
                     continue
-                target_day_col = day_col_candidates[0]
+                target_day_col = day_col_candidates
                 
                 # Bersihkan baris non-tanggal
                 df_table['Clean_Date'] = pd.to_datetime(df_table[target_day_col], errors='coerce')
@@ -141,61 +141,72 @@ if all_wells_data:
     # ==========================================
     st.subheader("📈 Grafik Tren Produksi Sumur")
     
+    prod_config = {
+        "Oil Rate (BOPD)": {"col": "Oil_Rate_BOPD", "color": "green", "y": "y1", "dash": "solid"},
+        "Water Rate (BWPD)": {"col": "Water_Rate_BWPD", "color": "blue", "y": "y1", "dash": "solid"},
+        "Gas Rate (MCFD)": {"col": "Gas_Rate_MSCFD", "color": "red", "y": "y2", "dash": "dash"}
+    }
+    
     selected_prod = st.multiselect(
         "Pilih Parameter Produksi yang Ingin Ditampilkan pada Grafik:",
-        options=["Oil Rate (BOPD)", "Water Rate (BWPD)", "Gas Rate (MCFD)"],
+        options=list(prod_config.keys()),
         default=["Oil Rate (BOPD)", "Water Rate (BWPD)"]
     )
     
-    if selected_prod:
-        fig_prod = go.Figure()
-        use_prod_y2 = False
-        
-        # Konfigurasi parameter plot dalam format kamus datar yang anti-error
-        if "Oil Rate (BOPD)" in selected_prod:
-            fig_prod.add_trace(go.Scatter(x=df_well['Date'], y=df_well['Oil_Rate_BOPD'], mode='lines+markers', name='Oil Rate (BOPD)', line=dict(color='green', width=2.5)))
-        
-        if "Water Rate (BWPD)" in selected_prod:
-            fig_prod.add_trace(go.Scatter(x=df_well['Date'], y=df_well['Water_Rate_BWPD'], mode='lines+markers', name='Water Rate (BWPD)', line=dict(color='blue', width=2)))
-            
-        if "Gas Rate (MCFD)" in selected_prod:
-            fig_prod.add_trace(go.Scatter(x=df_well['Date'], y=df_well['Gas_Rate_MSCFD'], mode='lines+markers', name='Gas Rate (MCFD)', yaxis="y2", line=dict(color='red', width=2, dash='dash')))
+    fig_prod = go.Figure()
+    use_prod_y2 = False
+    
+    for k in selected_prod:
+        cfg = prod_config[k]
+        fig_prod.add_trace(go.Scatter(x=df_well['Date'], y=df_well[cfg["col"]], mode='lines+markers', name=k, yaxis=cfg["y"], line=dict(color=cfg["color"], width=2, dash=cfg["dash"])))
+        if cfg["y"] == "y2":
             use_prod_y2 = True
             
-        prod_layout = {
-            "xaxis": dict(title="Tanggal"),
-            "yaxis": dict(title="Liquid Rate (BOPD / BWPD)", autorange=True),
-            "hovermode": "x unified",
-            "legend": dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1)
-        }
+    prod_layout = {
+        "xaxis": dict(title="Tanggal"),
+        "yaxis": dict(title="Liquid Rate (BOPD / BWPD)", autorange=True),
+        "hovermode": "x unified",
+        "legend": dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1)
+    }
+    if use_prod_y2:
+        prod_layout["yaxis2"] = dict(title="Gas Rate (MCFD)", overlaying="y", side="right", autorange=True)
         
-        if use_prod_y2:
-            prod_layout["yaxis2"] = dict(title="Gas Rate (MCFD)", overlaying="y", side="right", autorange=True)
-            
-        fig_prod.update_layout(**prod_layout)
-        st.plotly_chart(fig_prod, use_container_width=True)
-    else:
-        st.warning("Silakan pilih minimal satu parameter produksi.")
-        
+    fig_prod.update_layout(**prod_layout)
+    st.plotly_chart(fig_prod, use_container_width=True)
+    
     st.markdown("---")
     
     # ==========================================
-    # 5. GRAFIK DOWNHOLE PARAMETER (FORMAT FLAT SINGLE-LINE ANTI-ERROR)
+    # 5. GRAFIK DOWNHOLE PARAMETER (VERSI LOOPER DATAR TANPA IF BERCABANG)
     # ==========================================
     st.subheader("⚙️ Visualisasi Tren Downhole & ESP Parameter")
     
+    dh_config = {
+        "Pump Intake Pressure (PI)": {"col": "PI_PSI", "color": "purple", "y": "y1"},
+        "Pump Discharge Pressure (PD)": {"col": "PD_PSI", "color": "teal", "y": "y1"},
+        "VSD Frequency": {"col": "Frequency_Hz", "color": "darkblue", "y": "y2"}
+    }
+    
     selected_dh = st.multiselect(
         "Pilih Parameter Downhole yang Ingin Ditampilkan:",
-        options=["Pump Intake Pressure (PI)", "Pump Discharge Pressure (PD)", "VSD Frequency"],
+        options=list(dh_config.keys()),
         default=["Pump Intake Pressure (PI)", "Pump Discharge Pressure (PD)"]
     )
     
-    if selected_dh:
-        fig_downhole = go.Figure()
-        use_dh_y2 = False
-        
-        # Penulisan diganti ke format Datar/Flat 1 baris murni agar tidak terpotong sistem browser
-        if "Pump Intake Pressure (PI)" in selected_dh:
-            fig_downhole.add_trace(go.Scatter(x=df_well['Date'], y=df_well['PI_PSI'], mode='lines+markers', name='Intake Press (PI - PSI)', line={'color': 'purple', 'width': 2}))
+    fig_downhole = go.Figure()
+    use_dh_y2 = False
+    
+    # Looper datar satu baris untuk menghilangkan risiko salah ketik spasi/tab
+    for k in selected_dh:
+        cfg = dh_config[k]
+        fig_downhole.add_trace(go.Scatter(x=df_well['Date'], y=df_well[cfg["col"]], mode='lines+markers', name=k, yaxis=cfg["y"], line=dict(color=cfg["color"], width=2)))
+        if cfg["y"] == "y2":
+            use_dh_y2 = True
             
-        if "Pump Discharge Pressure (PD)" in selected_dh:
+    dh_layout = {
+        "xaxis": dict(title="Tanggal"),
+        "yaxis": dict(title="Pressure (PSI)", autorange=True),
+        "hovermode": "x unified",
+        "legend": dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1)
+    }
+    if use_dh_y2:
