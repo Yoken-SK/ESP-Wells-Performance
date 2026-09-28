@@ -137,10 +137,17 @@ with tab1:
     
     # Layout untuk Dual Axis (Sumbu Y Ganda)
       # Layout untuk Dual Axis (Sumbu Y Ganda)
-    fig_tp.update_layout(
-        yaxis=dict(title='Motor Temperature (°C)', titlefont=dict(color='orange'), tickfont=dict(color='orange')),
-        yaxis2=dict(title='Intake Pressure (PSI)', titlefont=dict(color='purple'), tickfont=dict(color='purple'),
-                    overlaying='y', side='right'),
+        fig_tp.update_layout(
+        yaxis=dict(
+            title=dict(text='Motor Temperature (°C)', font=dict(color='orange')),
+            tickfont=dict(color='orange')
+        ),
+        yaxis2=dict(
+            title=dict(text='Intake Pressure (PSI)', font=dict(color='purple')),
+            tickfont=dict(color='purple'),
+            overlaying='y',
+            side='right'
+        ),
         hovermode='x unified'
     )
     
