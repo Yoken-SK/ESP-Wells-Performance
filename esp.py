@@ -127,7 +127,7 @@ st.subheader("⚙️ Grafik Tren Downhole Parameter")
 tab1, tab2, tab3 = st.tabs(["Temperature & Pressure", "Vibration", "Frequency"])
 
 with tab1:
-    fig_tp = go.Figure()
+fig_tp = go.Figure()
     # Sumbu Kiri: Temperatur
     fig_tp.add_trace(go.Scatter(x=df_well['Date'], y=df_well['Motor_Temp_C'],
                         name='Motor Temp (°C)', line=dict(color='orange')))
@@ -135,9 +135,8 @@ with tab1:
     fig_tp.add_trace(go.Scatter(x=df_well['Date'], y=df_well['Intake_Pressure_PSI'],
                         name='Intake Press (PSI)', yaxis='y2', line=dict(color='purple')))
     
-    # Layout untuk Dual Axis (Sumbu Y Ganda)
-      # Layout untuk Dual Axis (Sumbu Y Ganda)
-        fig_tp.update_layout(
+    # Layout untuk Dual Axis (Sumbu Y Ganda) - Diperbaiki Spasinya
+    fig_tp.update_layout(
         yaxis=dict(
             title=dict(text='Motor Temperature (°C)', font=dict(color='orange')),
             tickfont=dict(color='orange')
@@ -150,7 +149,6 @@ with tab1:
         ),
         hovermode='x unified'
     )
-    
     st.plotly_chart(fig_tp, use_container_width=True)
 
 with tab2:
