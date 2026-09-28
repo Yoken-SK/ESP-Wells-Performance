@@ -137,13 +137,19 @@ if all_wells_data:
     st.markdown("---")
     
     # ==========================================
-    # 4. GRAFIK TREN PRODUKSI (DIKUNCI MANUAL & DUAL-AXIS UNTUK GAS)
+    # 4. GRAFIK TREN PRODUKSI (DIKUNCI WARNA & DUAL-AXIS UNTUK GAS)
     # ==========================================
     st.subheader("📈 Grafik Tren Produksi Sumur")
     
+    prod_config = {
+        "Oil Rate (BOPD)": {"col": "Oil_Rate_BOPD", "color": "green", "axis": "y1", "dash": "solid"},
+        "Water Rate (BWPD)": {"col": "Water_Rate_BWPD", "color": "blue", "axis": "y1", "dash": "solid"},
+        "Gas Rate (MCFD)": {"col": "Gas_Rate_MSCFD", "color": "red", "axis": "y2", "dash": "dash"}
+    }
+    
     selected_prod = st.multiselect(
         "Pilih Parameter Produksi yang Ingin Ditampilkan pada Grafik:",
-        options=["Oil Rate (BOPD)", "Water Rate (BWPD)", "Gas Rate (MCFD)"],
+        options=list(prod_config.keys()),
         default=["Oil Rate (BOPD)", "Water Rate (BWPD)"]
     )
     
@@ -151,25 +157,26 @@ if all_wells_data:
         fig_prod = go.Figure()
         use_prod_y2 = False
         
-        # Plotting manual satu per satu agar warna dan sumbu terkunci sempurna
-        if "Oil Rate (BOPD)" in selected_prod:
-            fig_prod.add_trace(go.Scatter(x=df_well['Date'], y=df_well['Oil_Rate_BOPD'], mode='lines+markers', name='Oil Rate (BOPD)', line=dict(color='green', width=2.5)))
-        
-        if "Water Rate (BWPD)" in selected_prod:
-            fig_prod.add_trace(go.Scatter(x=df_well['Date'], y=df_well['Water_Rate_BWPD'], mode='lines+markers', name='Water Rate (BWPD)', line=dict(color='blue', width=2)))
-            
-        if "Gas Rate (MCFD)" in selected_prod:
-            fig_prod.add_trace(go.Scatter(x=df_well['Date'], y=df_well['Gas_Rate_MSCFD'], mode='lines+markers', name='Gas Rate (MCFD)', yaxis="y2", line=dict(color='red', width=2, dash='dash')))
-            use_prod_y2 = True
-            
-        # Konfigurasi Tata Letak Sumbu Kembar (Dual-Axis)
+        for param in selected_prod:
+            cfg = prod_config[param]
+            is_y2 = (cfg["axis"] == "y2")
+            fig_prod.add_trace(go.Scatter(
+                x=df_well['Date'],
+                y=df_well[cfg["col"]],
+                mode='lines+markers',
+                name=param,
+                yaxis="y2" if is_y2 else "y",
+                line=dict(color=cfg["color"], width=2.5 if param == "Oil Rate (BOPD)" else 2, dash=cfg["dash"])
+            ))
+            if is_y2:
+                use_prod_y2 = True
+                
         prod_layout = {
             "xaxis": dict(title="Tanggal"),
             "yaxis": dict(title="Liquid Rate (BOPD / BWPD)", autorange=True),
             "hovermode": "x unified",
             "legend": dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1)
         }
-        
         if use_prod_y2:
             prod_layout["yaxis2"] = dict(title="Gas Rate (MCFD)", overlaying="y", side="right", autorange=True)
             
@@ -181,13 +188,19 @@ if all_wells_data:
     st.markdown("---")
     
     # ==========================================
-    # 5. GRAFIK DOWNHOLE PARAMETER (DUAL-AXIS UNTUK FREKUENSI)
+    # 5. GRAFIK DOWNHOLE PARAMETER (ANTI-EROR SPASI & DUAL-AXIS UNTUK FREKUENSI)
     # ==========================================
     st.subheader("⚙️ Visualisasi Tren Downhole & ESP Parameter")
     
+    dh_config = {
+        "Pump Intake Pressure (PI)": {"col": "PI_PSI", "color": "purple", "axis": "y1"},
+        "Pump Discharge Pressure (PD)": {"col": "PD_PSI", "color": "teal", "axis": "y1"},
+        "VSD Frequency": {"col": "Frequency_Hz", "color": "darkblue", "axis": "y2"}
+    }
+    
     selected_dh = st.multiselect(
         "Pilih Parameter Downhole yang Ingin Ditampilkan:",
-        options=["Pump Intake Pressure (PI)", "Pump Discharge Pressure (PD)", "VSD Frequency"],
+        options=list(dh_config.keys()),
         default=["Pump Intake Pressure (PI)", "Pump Discharge Pressure (PD)"]
     )
     
@@ -195,7 +208,8 @@ if all_wells_data:
         fig_downhole = go.Figure()
         use_dh_y2 = False
         
-        if "Pump Intake Pressure (PI)" in selected_dh:
-            fig_downhole.add_trace(go.Scatter(x=df_well['Date'], y=df_well['PI_PSI'], mode='lines+markers', name='Intake Press (PI - PSI)', line=dict(color='purple', width=2)))
-            
-        if "Pump Discharge Pressure (PD)" in selected_dh:
+        for param in selected_dh:
+            cfg = dh_config[param]
+            is_y2 = (cfg["axis"] == "y2")
+            fig_downhole.add_trace(go.Scatter(
+                x=df_well['Date'],
