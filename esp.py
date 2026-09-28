@@ -54,7 +54,7 @@ if uploaded_file is not None:
                     continue
                 target_day_col = day_col_candidates
                 
-                # Deteksi Bulan & Tahun Cadangan
+                # Deteksi Bulan & Tahu Cadangan dari Metadata
                 detected_month = 9
                 detected_year = 2026
                 for idx, row in df_raw_full.iloc[:header_row_idx].iterrows():
@@ -79,7 +79,7 @@ if uploaded_file is not None:
                             return pd.to_numeric(df_table[c], errors='coerce')
                     return pd.Series(default_val, index=df_table.index)
                 
-                # Ekstraksi Parameter
+                # Ekstraksi Parameter Lapangan
                 df_clean['Oil_Rate_BOPD'] = find_and_parse_flexible(['oilbopd', 'bopd', 'oil', 'bop']).fillna(0)
                 df_clean['Water_Rate_BWPD'] = find_and_parse_flexible(['waterbwpd', 'bwpd', 'water', 'bwp']).fillna(0)
                 df_clean['Water_Cut_Percent'] = find_and_parse_flexible(['watercut', 'wc%', 'wc']).fillna(0)
@@ -91,10 +91,10 @@ if uploaded_file is not None:
                 
                 df_clean['Raw_Day'] = df_table[target_day_col]
                 
-                # Filter baris aktif valid
+                # Pangkas baris sisa penutup di ujung paling bawah lembar excel
                 df_clean['Valid_Check'] = df_clean['Oil_Rate_BOPD'] + df_clean['Water_Rate_BWPD'] + df_clean['PI_PSI']
                 df_clean = df_clean[df_clean['Valid_Check'] > 0]
-                df_clean = df_clean[(df_clean['Oil_Rate_BOPD'] != 0) | (df_clean['Water_Rate_BWPD'] != 0)]
+                df_clean = df_clean[(df_clean['Oil_Rate_BOPD'] != 0) | (df_clean['Water_Rate_BWPD'] != 0) | (df_clean['PI_PSI'] != 0)]
                 
                 if df_clean.empty:
                     continue
@@ -158,7 +158,7 @@ if all_wells_data:
     st.markdown("---")
     
     # ==========================================
-    # 4. GRAFIK TREN PRODUKSI (VERSI ULTRA-FLAT ANTI-ERROR SPASI)
+    # 4. GRAFIK TREN PRODUKSI
     # ==========================================
     st.subheader("📈 Grafik Tren Produksi Sumur")
     
@@ -170,7 +170,6 @@ if all_wells_data:
     
     fig_prod = go.Figure()
     
-    # Penulisan satu baris datar yang aman 100% dari distorsi spasi editor web
     if "Oil Rate (BOPD)" in selected_prod: fig_prod.add_trace(go.Scatter(x=df_well['Date'], y=df_well['Oil_Rate_BOPD'], mode='lines+markers', name='Oil Rate (BOPD)', line=dict(color='green', width=2.5)))
     if "Water Rate (BWPD)" in selected_prod: fig_prod.add_trace(go.Scatter(x=df_well['Date'], y=df_well['Water_Rate_BWPD'], mode='lines+markers', name='Water Rate (BWPD)', line=dict(color='blue', width=2)))
     if "Gas Rate (MCFD)" in selected_prod: fig_prod.add_trace(go.Scatter(x=df_well['Date'], y=df_well['Gas_Rate_MSCFD'], mode='lines+markers', name='Gas Rate (MCFD)', yaxis="y2", line=dict(color='red', width=2, dash='dash')))
@@ -187,5 +186,5 @@ if all_wells_data:
     st.markdown("---")
     
     # ==========================================
-    # 5. GRAFIK DOWNHOLE PARAMETER (VERSI ULTRA-FLAT ANTI-ERROR SPASI)
+    # 5. GRAFIK DOWNHOLE PARAMETER (INTEGRASI PENUH PI & PD DENGAN FLAT SINGLE-LINE)
     # ==========================================
