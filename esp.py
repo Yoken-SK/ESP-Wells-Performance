@@ -165,6 +165,9 @@ if all_wells_data:
     # ==========================================
     # 5. GRAFIK DOWNHOLE DENGAN FITUR MULTISELECT
     # ==========================================
+    # ==========================================
+    # 5. GRAFIK DOWNHOLE DENGAN FITUR MULTISELECT
+    # ==========================================
     st.subheader("⚙️ Visualisasi Tren Downhole & ESP Parameter")
     
     # Kotak pilihan untuk menampilkan satu, sebagian, atau semua parameter sekaligus
@@ -184,3 +187,8 @@ if all_wells_data:
             elif param == "Pump Discharge Pressure (PD)":
                 fig_downhole.add_trace(go.Scatter(x=df_well['Date'], y=df_well['PD_PSI'], mode='lines+markers', name='Discharge Press (PSI)', line=dict(color='teal')))
             elif param == "VSD Frequency":
+                fig_downhole.add_trace(go.Scatter(x=df_well['Date'], y=df_well['Frequency_Hz'], mode='lines', name='Frequency (Hz)', line=dict(color='darkblue'), yaxis="y2"))
+                fig_downhole.update_layout(yaxis2=dict(title="Frequency (Hz)", overlaying="y", side="right"))
+                
+        fig_downhole.update_layout(xaxis_title='Tanggal', yaxis_title='Pressure (PSI)', hovermode='x unified')
+        st.plotly_chart(fig_downhole, use_container_width=True)
