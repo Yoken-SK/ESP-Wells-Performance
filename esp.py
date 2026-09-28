@@ -14,7 +14,7 @@ st.set_page_config(
 )
 
 st.title("⚡ ESP Production & Downhole Monitoring Dashboard")
-st.markdown("Dashboard cerdas yang dikustomisasi khusus untuk membaca format multi-sheet laporan lapangan.")
+st.markdown("Dashboard otomatis mendeteksi sheet berlabel **'Monitoring'** dari file Excel lapangan Anda.")
 
 # ==========================================
 # 2. SIDEBAR UPLOAD EXCEL MULTI-SHEET
@@ -50,7 +50,7 @@ if uploaded_file is not None:
                 if header_row_idx is None:
                     continue
                 
-                # Membaca ulang sheet dari baris tabel data utama ke bawah
+                # Membaca ulang sheet khusus dari baris tabel data utama ke bawah
                 df_table = pd.read_excel(uploaded_file, sheet_name=sheet, skiprows=header_row_idx)
                 
                 # Bersihkan nama kolom dari spasi berlebih dan enter (\n)
@@ -77,22 +77,20 @@ if uploaded_file is not None:
                         if 'well name' in cell_text.lower():
                             well_name_derived = row_cells[-1].replace(':', '').strip()
                 
-                # --- PEMETAAN KOLOM STRIP KETAT & CLEANING AGRESIP ---
+                # --- PEMETAAN (MAPPING) KOLOM STRIP KETAT ---
                 df_clean = pd.DataFrame()
                 df_clean['Date'] = df_table['Clean_Date']
                 df_clean['Well_Name'] = well_name_derived
                 
+                # Fungsi pencarian kolom cerdas
                 def find_and_parse_strict(keywords, default_val=np.nan):
                     for c in df_table.columns:
                         clean_col_name = c.lower().replace(' ', '')
                         if any(k.replace(' ', '') in clean_col_name for k in keywords):
-                            # Konversi paksa string teks bermasalah menjadi NaN agar bisa dibersihkan
-                            series_converted = pd.to_numeric(df_table[c], errors='coerce')
-                            # Jika kolom kosong akibat baris unit, isi dengan nilai default aman
-                            return series_converted
+                            return pd.to_numeric(df_table[c], errors='coerce')
                     return pd.Series(default_val, index=df_table.index)
                 
-                # Ekstraksi Parameter Laju Produksi 
+                # Ekstraksi Parameter Laju Produksi
                 df_clean['Oil_Rate_BOPD'] = find_and_parse_strict(['oilbopd', 'bopd', 'oil']).fillna(0)
                 df_clean['Water_Rate_BWPD'] = find_and_parse_strict(['waterbwpd', 'bwpd', 'water']).fillna(0)
                 df_clean['Water_Cut_Percent'] = find_and_parse_strict(['watercut', 'wc%']).fillna(0)
@@ -103,8 +101,12 @@ if uploaded_file is not None:
                 df_clean['PD_PSI'] = find_and_parse_strict(['pdischarge', 'pdp', 'discharge', 'pdischargepsi']).fillna(method='ffill').fillna(0)
                 df_clean['Frequency_Hz'] = find_and_parse_strict(['freqhz', 'hz', 'freq'], default_val=40).fillna(40)
                 
-                # Hilangkan baris data yang bernilai 0 murni di kolom kritikal untuk menjaga akurasi skala grafik
-                df_clean = df_clean[df_clean['Oil_Rate_BOPD'] > 0] if not df_clean.empty else df_clean
+                # Parameter Baseline Tambahan
+                df_clean['Motor_Temp_C'] = 95.0
+                df_clean['Vibration_G'] = 1.2
+                
+                # Hilangkan baris data kosong kritikal agar skala grafik naik
+                df_clean = df_clean[(df_clean['Oil_Rate_BOPD'] > 0) | (df_clean['PI_PSI'] > 0)]
                 
                 if not df_clean.empty:
                     all_wells_data[well_name_derived] = df_clean.sort_values('Date')
@@ -112,7 +114,7 @@ if uploaded_file is not None:
             if all_wells_data:
                 st.sidebar.success(f"Berhasil memuat {len(all_wells_data)} Sumur Monitoring!")
             else:
-                st.sidebar.error("Gagal memproses baris angka. Cek apakah kolom berisi data teks unit.")
+                st.sidebar.error("Gagal mengekstrak data terstruktur dari sheet monitoring.")
                 
     except Exception as e:
         st.sidebar.error(f"Eror pembacaan file: {e}")
@@ -143,7 +145,7 @@ if all_wells_data:
     st.markdown("---")
     
     # ==========================================
-    # 4. GRAFIK TREN PRODUKSI (MULTISELECT)
+    # 4. GRAFIK TREN PRODUKSI (DENGAN MULTISELECT OIL, WATER, GAS)
     # ==========================================
     st.subheader("📈 Grafik Tren Produksi Sumur")
     
@@ -204,3 +206,7 @@ if all_wells_data:
     selected_params = st.multiselect(
         "Pilih Parameter Downhole yang Ingin Ditampilkan:",
         options=list(downhole_options.keys()),
+        default=["Pump Intake Pressure (PI)", "Pump Discharge Pressure (PD)"]
+    )
+    
+    if not selected_params:
