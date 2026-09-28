@@ -159,29 +159,25 @@ if all_wells_data:
     
     st.markdown("---")
     
-    # ==========================================
-    # 4. GRAFIK TREN PRODUKSI (FORMAT TATA LETAK DATAR MUTLAK)
-    # ==========================================
-    st.subheader("📈 Grafik Tren Produksi Sumur")
+    # Grid Layout untuk Menjajarkan Grafik Produksi dengan Skematik Animasi Pompa Sumur ESP
+    col_graph, col_anim = st.columns([2, 1])
     
-    selected_prod = st.multiselect(
-        "Pilih Parameter Produksi yang Ingin Ditampilkan pada Grafik:",
-        options=["Oil Rate (BOPD)", "Water Rate (BWPD)", "Gas Rate (MCFD)"],
-        default=["Oil Rate (BOPD)", "Water Rate (BWPD)", "Gas Rate (MCFD)"]
-    )
-    
-    fig_prod = go.Figure()
-    
-    # Plotting Datar Baris Tunggal Anti-Gagal
-    if "Oil Rate (BOPD)" in selected_prod: fig_prod.add_trace(go.Scatter(x=df_well['Date'], y=df_well['Oil_Rate_BOPD'], mode='lines+markers', name='Oil Rate (BOPD)', line=dict(color='green', width=2.5)))
-    if "Water Rate (BWPD)" in selected_prod: fig_prod.add_trace(go.Scatter(x=df_well['Date'], y=df_well['Water_Rate_BWPD'], mode='lines+markers', name='Water Rate (BWPD)', line=dict(color='blue', width=2)))
-    if "Gas Rate (MCFD)" in selected_prod: fig_prod.add_trace(go.Scatter(x=df_well['Date'], y=df_well['Gas_Rate_MSCFD'], mode='lines+markers', name='Gas Rate (MCFD)', yaxis="y2", line=dict(color='red', width=2, dash='dash')))
-        
-    # Set Properti Tata Letak Secara Baris Tunggal Pendek (Aman Total Dari Distorsi Lipatan Browser)
-    fig_prod.layout.xaxis.title = "Tanggal"
-    fig_prod.layout.yaxis.title = "Liquid Rate (BOPD / BWPD)"
-    fig_prod.layout.yaxis.autorange = True
-    fig_prod.layout.yaxis2.title = "Gas Rate (MCFD)"
-    fig_prod.layout.yaxis2.overlaying = "y"
-    fig_prod.layout.yaxis2.side = "right"
-    fig_prod.layout.yaxis2.autorange = True
+    with col_graph:
+        # ==========================================
+        # 4. GRAFIK TREN PRODUKSI
+        # ==========================================
+        st.subheader("📈 Grafik Tren Produksi Sumur")
+        selected_prod = st.multiselect("Pilih Parameter Produksi:", options=["Oil Rate (BOPD)", "Water Rate (BWPD)", "Gas Rate (MCFD)"], default=["Oil Rate (BOPD)", "Water Rate (BWPD)", "Gas Rate (MCFD)"])
+        fig_prod = go.Figure()
+        if "Oil Rate (BOPD)" in selected_prod: fig_prod.add_trace(go.Scatter(x=df_well['Date'], y=df_well['Oil_Rate_BOPD'], mode='lines+markers', name='Oil Rate (BOPD)', line=dict(color='green', width=2.5)))
+        if "Water Rate (BWPD)" in selected_prod: fig_prod.add_trace(go.Scatter(x=df_well['Date'], y=df_well['Water_Rate_BWPD'], mode='lines+markers', name='Water Rate (BWPD)', line=dict(color='blue', width=2)))
+        if "Gas Rate (MCFD)" in selected_prod: fig_prod.add_trace(go.Scatter(x=df_well['Date'], y=df_well['Gas_Rate_MSCFD'], mode='lines+markers', name='Gas Rate (MCFD)', yaxis="y2", line=dict(color='red', width=2, dash='dash')))
+            
+        fig_prod.layout.xaxis.title = "Tanggal"
+        fig_prod.layout.yaxis.title = "Liquid Rate (BOPD / BWPD)"
+        fig_prod.layout.yaxis.autorange = True
+        fig_prod.layout.yaxis2.title = "Gas Rate (MCFD)"
+        fig_prod.layout.yaxis2.overlaying = "y"
+        fig_prod.layout.yaxis2.side = "right"
+        fig_prod.layout.yaxis2.autorange = True
+        fig_prod.layout.hovermode = "x unified"
