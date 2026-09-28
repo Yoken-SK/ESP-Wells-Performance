@@ -28,17 +28,28 @@ selected_well = "No Data"
 
 if uploaded_file is not None:
     try:
-        # A. MEMBACA METADATA & HISTORY (15 Baris Pertama)
-        df_meta = pd.read_excel(uploaded_file, nrows=15, header=None)
+        # B. MEMBACA TABEL DATA UTAMA & DETEKSI HEADER OTOMATIS
+        # ==========================================
+        # Membaca seluruh sheet tanpa memotong baris terlebih dahulu
+        df_raw_full = pd.read_excel(uploaded_file, header=None)
         
-        for idx, row in df_meta.iterrows():
-            key = str(row[0]).strip() if pd.notnull(row[0]) else ""
-            val = str(row[1]).replace(':', '').strip() if pd.notnull(row[1]) else ""
-            if key and val:
-                metadata[key] = val
+        # Mencari di baris mana kata 'Day' berada secara otomatis dengan filter tipe data
+        header_row_idx = 14  # Default baseline baris 15 (indeks 14)
+        for idx, row in df_raw_full.iterrows():
+            # Memastikan hanya sel berisi teks yang diproses agar tidak memicu eror float
+            row_str = [str(x).strip().lower() for x in row.values if pd.notnull(x)]
+            if 'day' in row_str:
+                header_row_idx = idx
+                break
         
-        # Ambil nama sumur dari metadata
-        selected_well = metadata.get("Well Name", "Unknown Well")
+        # Membaca ulang data mulai dari baris header yang ditemukan
+        df_raw = pd.read_excel(uploaded_file, skiprows=header_row_idx)
+        
+        # Membersihkan nama kolom dari spasi di awal/akhir dan karakter enter (\n)
+        df_raw.columns = df_raw.columns.str.strip().str.replace('\n', ' ')
+        
+        # Menghapus baris kosong di bawah tabel dengan mendeteksi kolom pertama yang valid
+        df_raw = df_raw.dropna(subset=[df_raw.columns[0]])
         
         # B. MEMBACA TABEL DATA UTAMA & DETEKSI HEADER OTOMATIS
         # ==========================================
