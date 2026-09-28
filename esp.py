@@ -47,7 +47,7 @@ def generate_esp_data():
             motor_temp = np.random.uniform(90, 110) + (oil_rate * 0.02) # °C
             intake_press = np.random.uniform(500, 800) - (liquid_rate * 0.1) # Psi
             vibration = np.random.uniform(0.5, 2.5) # Gs
-            frequency = np.random.choice([48, 50, 52, 55]) # Hz
+            frequency = np.random.choice([45, 50, 55, 60]) # Hz
             
             all_data.append({
                 "Date": date,
