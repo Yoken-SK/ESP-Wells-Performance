@@ -56,7 +56,7 @@ if uploaded_file is not None:
                 day_col_candidates = [c for c in df_table.columns if 'day' in c.lower() or 'date' in c.lower() or 'tgl' in c.lower()]
                 if not day_col_candidates:
                     continue
-                target_day_col = day_col_candidates[0]
+                target_day_col = day_col_candidates
                 
                 # Bersihkan baris non-tanggal
                 df_table['Clean_Date'] = pd.to_datetime(df_table[target_day_col], errors='coerce')
@@ -73,7 +73,7 @@ if uploaded_file is not None:
                         if 'well name' in cell_text.lower() or 'sumur' in cell_text.lower():
                             well_name_derived = row_cells[-1].replace(':', '').strip()
                 
-                # --- PEMETAAN (MAPPING) KOLOM PERLOONGAN KATA KUNCI ---
+                # --- PEMETAAN (MAPPING) KOLOM ---
                 df_clean = pd.DataFrame()
                 df_clean['Date'] = df_table['Clean_Date']
                 df_clean['Well_Name'] = well_name_derived
@@ -91,7 +91,7 @@ if uploaded_file is not None:
                 df_clean['Water_Cut_Percent'] = find_and_parse_flexible(['watercut', 'wc%', 'wc']).fillna(0)
                 df_clean['Gas_Rate_MSCFD'] = find_and_parse_flexible(['agfmcfd', 'mcfd', 'gas', 'agf', 'gascf']).fillna(0)
                 
-                # Ekstraksi Parameter Tekanan Pompa Downhole & Freq (KATA KUNCI DIPERLUAS: PINTAKE, PIP, PDISHCARGE, PDP)
+                # Ekstraksi Parameter Tekanan Pompa Downhole & Freq
                 df_clean['PI_PSI'] = find_and_parse_flexible(['pintake', 'pip', 'intake', 'pintakepsi', 'p.intake']).ffill().bfill().fillna(0)
                 df_clean['PD_PSI'] = find_and_parse_flexible(['pdischarge', 'pdp', 'discharge', 'pdischargepsi', 'p.discharge']).ffill().bfill().fillna(0)
                 df_clean['Frequency_Hz'] = find_and_parse_flexible(['freqhz', 'hz', 'freq', 'vsd'], default_val=40).ffill().bfill().fillna(40)
@@ -100,14 +100,13 @@ if uploaded_file is not None:
                 df_clean['Motor_Temp_C'] = 95.0
                 df_clean['Vibration_G'] = 1.2
                 
-                # KUNCI UTAMA: Hapus filter ketat '> 0' agar data downhole yang bernilai 0 di awal/akhir tidak memicu error blank
                 if not df_clean.empty:
                     all_wells_data[well_name_derived] = df_clean.sort_values('Date')
                 
             if all_wells_data:
                 st.sidebar.success(f"Berhasil memuat {len(all_wells_data)} Sumur Monitoring!")
             else:
-                st.sidebar.error("Gagal mengekstrak data. Periksa apakah baris data kosong atau format kolom bergeser.")
+                st.sidebar.error("Gagal mengekstrak data terstruktur dari sheet monitoring.")
                 
     except Exception as e:
         st.sidebar.error(f"Eror pembacaan file: {e}")
@@ -138,11 +137,22 @@ if all_wells_data:
     st.markdown("---")
     
     # ==========================================
-    # 4. GRAFIK TREN PRODUKSI
+    # 4. GRAFIK TREN PRODUKSI (DIKUNCI WARNA HIJAU, BIRU, MERAH)
     # ==========================================
     st.subheader("📈 Grafik Tren Produksi Sumur")
     
-    prod_mapping = {"Oil Rate (BOPD)": "Oil_Rate_BOPD", "Water Rate (BWPD)": "Water_Rate_BWPD", "Gas Rate (MCFD)": "Gas_Rate_MSCFD"}
+    prod_mapping = {
+        "Oil Rate (BOPD)": "Oil_Rate_BOPD", 
+        "Water Rate (BWPD)": "Water_Rate_BWPD", 
+        "Gas Rate (MCFD)": "Gas_Rate_MSCFD"
+    }
+    
+    # Kamus Pengunci Warna Eksplisit
+    color_discrete_map = {
+        "Oil Rate (BOPD)": "green",
+        "Water Rate (BWPD)": "blue",
+        "Gas Rate (MCFD)": "red"
+    }
     
     selected_prod = st.multiselect(
         "Pilih Parameter Produksi yang Ingin Ditampilkan pada Grafik:",
@@ -154,7 +164,20 @@ if all_wells_data:
         cols_to_plot = [prod_mapping[p] for p in selected_prod]
         df_melted_prod = df_well.melt(id_vars=['Date'], value_vars=cols_to_plot, var_name='Parameter', value_name='Rate Value')
         
-        fig_prod = px.line(df_melted_prod, x='Date', y='Rate Value', color='Parameter', markers=True, title="Historical Production Trend")
+        # Balikkan mapping kolom ke nama label agar color_discrete_map dapat membaca nama aslinya
+        inv_prod_mapping = {v: k for k, v in prod_mapping.items()}
+        df_melted_prod['Parameter'] = df_melted_prod['Parameter'].map(inv_prod_mapping)
+        
+        # Membuat grafik garis dengan warna yang telah dikunci
+        fig_prod = px.line(
+            df_melted_prod, 
+            x='Date', 
+            y='Rate Value', 
+            color='Parameter', 
+            color_discrete_map=color_discrete_map,
+            markers=True, 
+            title="Historical Production Trend"
+        )
         fig_prod.update_layout(xaxis_title="Tanggal", yaxis_title="Rate Value", hovermode="x unified")
         fig_prod.update_yaxes(autorange=True)
         st.plotly_chart(fig_prod, use_container_width=True)
@@ -185,12 +208,3 @@ if all_wells_data:
         fig_downhole.update_yaxes(autorange=True)
         st.plotly_chart(fig_downhole, use_container_width=True)
     else:
-        st.warning("Silakan centang opsi parameter di atas untuk memuat bagan grafik.")
-        
-    # ==========================================
-    # 6. TABEL DETAIL DATA KESELURUHAN
-    # ==========================================
-    with st.expander("🔍 Lihat Detail Tabel Data Bersih"):
-        st.dataframe(df_well, use_container_width=True)
-else:
-    st.info("Silakan unggah berkas laporan Excel sumur ESP Anda melalui panel sidebar untuk memulai visualisasi monitoring.")
