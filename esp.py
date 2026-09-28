@@ -40,33 +40,61 @@ if uploaded_file is not None:
         # Ambil nama sumur dari metadata
         selected_well = metadata.get("Well Name", "Unknown Well")
         
-        # B. MEMBACA TABEL DATA UTAMA (Mulai dari baris ke-16 / indeks 15)
-        # Menyesuaikan dengan baris bertingkat (multi-header)
-        df_raw = pd.read_excel(uploaded_file, skiprows=14)
+        # B. MEMBACA TABEL DATA UTAMA & DETEKSI HEADER OTOMATIS
+        # ==========================================
+        # Membaca seluruh sheet tanpa memotong baris terlebih dahulu
+        df_raw_full = pd.read_excel(uploaded_file, header=None)
         
-        # Membersihkan kolom kosong atau baris penutup jika ada
-        df_raw = df_raw.dropna(subset=['Day'])
+        # Mencari di baris mana kata 'Day' berada secara otomatis
+        header_row_idx = 14  # Default baseline baris 15 (indeks 14)
+        for idx, row in df_raw_full.iterrows():
+            row_str = [str(x).strip().lower() for x in row.values]
+            if 'day' in row_str:
+                header_row_idx = idx
+                break
         
-        # C. PEMETAAN (MAPPING) KOLOM SESUAI FORMAT GAMBAR LAPANGAN
+        # Membaca ulang data mulai dari baris header yang ditemukan
+        df_raw = pd.read_excel(uploaded_file, skiprows=header_row_idx)
+        
+        # Membersihkan nama kolom dari spasi di awal/akhir dan karakter enter (\n)
+        df_raw.columns = df_raw.columns.str.strip().str.replace('\n', ' ')
+        
+        # Menghapus baris kosong di bawah tabel
+        df_raw = df_raw.dropna(subset=[df_raw.columns[0]])
+        
+        # ==========================================
+        # C. PEMETAAN (MAPPING) KOLOM SECARA TELITI
+        # ==========================================
         df_clean = pd.DataFrame()
-        df_clean['Date'] = pd.to_datetime(df_raw['Day'], errors='coerce')
+        
+        # Cari kolom tanggal (mendeteksi variasi kata 'Day' atau 'Date')
+        day_col = [c for c in df_raw.columns if 'day' in c.lower() or 'date' in c.lower()][0]
+        df_clean['Date'] = pd.to_datetime(df_raw[day_col], errors='coerce')
         df_clean['Well_Name'] = selected_well
         
-        # Parameter Produksi
-        # Mengatasi kolom 'error'/'#VALUE!' dengan mengubah ke numerik (jika error jadi NaN)
-        df_clean['Oil_Rate_BOPD'] = pd.to_numeric(df_raw['BOPD'], errors='coerce').fillna(0)
-        df_clean['Water_Rate_BWPD'] = pd.to_numeric(df_raw['BWPD'], errors='coerce').fillna(0)
-        df_clean['Water_Cut_Percent'] = pd.to_numeric(df_raw['WC\n%'], errors='coerce').fillna(0)
-        df_clean['Gas_Rate_MSCFD'] = pd.to_numeric(df_raw['AGF\nMCFD'], errors='coerce').fillna(0)
+        # Cari dan petakan kolom parameter produksi (mencari substring kata kunci)
+        bopd_col = [c for c in df_raw.columns if 'bopd' in c.lower()][0]
+        bwpd_col = [c for c in df_raw.columns if 'bwpd' in c.lower()][0]
+        wc_col = [c for c in df_raw.columns if 'wc' in c.lower() or 'water cut' in c.lower()][0]
+        gas_col = [c for c in df_raw.columns if 'agf' in c.lower() or 'mcfd' in c.lower() or 'gas' in c.lower()][0]
         
-        # Parameter Downhole & ESP
-        df_clean['PI_PSI'] = pd.to_numeric(df_raw['P intake\npsi'], errors='coerce').fillna(0)
-        df_clean['PD_PSI'] = pd.to_numeric(df_raw['P discharge\npsi'], errors='coerce').fillna(0)
-        df_clean['Frequency_Hz'] = pd.to_numeric(df_raw['Freq\nHz'], errors='coerce').fillna(40)
+        df_clean['Oil_Rate_BOPD'] = pd.to_numeric(df_raw[bopd_col], errors='coerce').fillna(0)
+        df_clean['Water_Rate_BWPD'] = pd.to_numeric(df_raw[bwpd_col], errors='coerce').fillna(0)
+        df_clean['Water_Cut_Percent'] = pd.to_numeric(df_raw[wc_col], errors='coerce').fillna(0)
+        df_clean['Gas_Rate_MSCFD'] = pd.to_numeric(df_raw[gas_col], errors='coerce').fillna(0)
         
-        # Kolom opsional tambahan (Bisa diaktifkan jika data terisi)
-        df_clean['Motor_Temp_C'] = 90.0 # Nilai asumsi baseline karena di gambar kolom temp terpotong/kosong
-        df_clean['Vibration_G'] = 1.0   # Nilai asumsi baseline
+        # Cari dan petakan kolom parameter downhole tekanan
+        pi_col = [c for c in df_raw.columns if 'intake' in c.lower() or 'pip' in c.lower() or 'p intake' in c.lower()][0]
+        pd_col = [c for c in df_raw.columns if 'discharge' in c.lower() or 'p discharge' in c.lower()][0]
+        freq_col = [c for c in df_raw.columns if 'freq' in c.lower() or 'hz' in c.lower()][0]
+        
+        df_clean['PI_PSI'] = pd.to_numeric(df_raw[pi_col], errors='coerce').fillna(0)
+        df_clean['PD_PSI'] = pd.to_numeric(df_raw[pd_col], errors='coerce').fillna(0)
+        df_clean['Frequency_Hz'] = pd.to_numeric(df_raw[freq_col], errors='coerce').fillna(40)
+        
+        # Nilai acuan default untuk parameter pendukung
+        df_clean['Motor_Temp_C'] = 95.0
+        df_clean['Vibration_G'] = 1.2
         
         df_well = df_clean.sort_values('Date')
         st.sidebar.success(f"Berhasil memuat data Sumur: {selected_well}")
