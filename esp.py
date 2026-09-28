@@ -1,7 +1,7 @@
 import streamlit as st
 import pandas as pd
 import numpy as np
-import plotly.express as px
+import plotly.graph_objects as go
 
 # ==========================================
 # 1. KONFIGURASI HALAMAN DASHBOARD
@@ -137,49 +137,43 @@ if all_wells_data:
     st.markdown("---")
     
     # ==========================================
-    # 4. GRAFIK TREN PRODUKSI (DIKUNCI WARNA HIJAU, BIRU, MERAH)
+    # 4. GRAFIK TREN PRODUKSI (DIKUNCI MANUAL & DUAL-AXIS UNTUK GAS)
     # ==========================================
     st.subheader("📈 Grafik Tren Produksi Sumur")
     
-    prod_mapping = {
-        "Oil Rate (BOPD)": "Oil_Rate_BOPD", 
-        "Water Rate (BWPD)": "Water_Rate_BWPD", 
-        "Gas Rate (MCFD)": "Gas_Rate_MSCFD"
-    }
-    
-    # Kamus Pengunci Warna Eksplisit
-    color_discrete_map = {
-        "Oil Rate (BOPD)": "green",
-        "Water Rate (BWPD)": "blue",
-        "Gas Rate (MCFD)": "red"
-    }
-    
     selected_prod = st.multiselect(
         "Pilih Parameter Produksi yang Ingin Ditampilkan pada Grafik:",
-        options=list(prod_mapping.keys()),
+        options=["Oil Rate (BOPD)", "Water Rate (BWPD)", "Gas Rate (MCFD)"],
         default=["Oil Rate (BOPD)", "Water Rate (BWPD)"]
     )
     
     if selected_prod:
-        cols_to_plot = [prod_mapping[p] for p in selected_prod]
-        df_melted_prod = df_well.melt(id_vars=['Date'], value_vars=cols_to_plot, var_name='Parameter', value_name='Rate Value')
+        fig_prod = go.Figure()
+        use_prod_y2 = False
         
-        # Balikkan mapping kolom ke nama label agar color_discrete_map dapat membaca nama aslinya
-        inv_prod_mapping = {v: k for k, v in prod_mapping.items()}
-        df_melted_prod['Parameter'] = df_melted_prod['Parameter'].map(inv_prod_mapping)
+        # Plotting manual satu per satu agar warna dan sumbu terkunci sempurna
+        if "Oil Rate (BOPD)" in selected_prod:
+            fig_prod.add_trace(go.Scatter(x=df_well['Date'], y=df_well['Oil_Rate_BOPD'], mode='lines+markers', name='Oil Rate (BOPD)', line=dict(color='green', width=2.5)))
         
-        # Membuat grafik garis dengan warna yang telah dikunci
-        fig_prod = px.line(
-            df_melted_prod, 
-            x='Date', 
-            y='Rate Value', 
-            color='Parameter', 
-            color_discrete_map=color_discrete_map,
-            markers=True, 
-            title="Historical Production Trend"
-        )
-        fig_prod.update_layout(xaxis_title="Tanggal", yaxis_title="Rate Value", hovermode="x unified")
-        fig_prod.update_yaxes(autorange=True)
+        if "Water Rate (BWPD)" in selected_prod:
+            fig_prod.add_trace(go.Scatter(x=df_well['Date'], y=df_well['Water_Rate_BWPD'], mode='lines+markers', name='Water Rate (BWPD)', line=dict(color='blue', width=2)))
+            
+        if "Gas Rate (MCFD)" in selected_prod:
+            fig_prod.add_trace(go.Scatter(x=df_well['Date'], y=df_well['Gas_Rate_MSCFD'], mode='lines+markers', name='Gas Rate (MCFD)', yaxis="y2", line=dict(color='red', width=2, dash='dash')))
+            use_prod_y2 = True
+            
+        # Konfigurasi Tata Letak Sumbu Kembar (Dual-Axis)
+        prod_layout = {
+            "xaxis": dict(title="Tanggal"),
+            "yaxis": dict(title="Liquid Rate (BOPD / BWPD)", autorange=True),
+            "hovermode": "x unified",
+            "legend": dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1)
+        }
+        
+        if use_prod_y2:
+            prod_layout["yaxis2"] = dict(title="Gas Rate (MCFD)", overlaying="y", side="right", autorange=True)
+            
+        fig_prod.update_layout(**prod_layout)
         st.plotly_chart(fig_prod, use_container_width=True)
     else:
         st.warning("Silakan pilih minimal satu parameter produksi.")
@@ -187,24 +181,21 @@ if all_wells_data:
     st.markdown("---")
     
     # ==========================================
-    # 5. GRAFIK DOWNHOLE PARAMETER
+    # 5. GRAFIK DOWNHOLE PARAMETER (DUAL-AXIS UNTUK FREKUENSI)
     # ==========================================
     st.subheader("⚙️ Visualisasi Tren Downhole & ESP Parameter")
     
-    dh_mapping = {"Pump Intake Pressure (PI)": "PI_PSI", "Pump Discharge Pressure (PD)": "PD_PSI", "VSD Frequency": "Frequency_Hz"}
-    
     selected_dh = st.multiselect(
         "Pilih Parameter Downhole yang Ingin Ditampilkan:",
-        options=list(dh_mapping.keys()),
+        options=["Pump Intake Pressure (PI)", "Pump Discharge Pressure (PD)", "VSD Frequency"],
         default=["Pump Intake Pressure (PI)", "Pump Discharge Pressure (PD)"]
     )
     
     if selected_dh:
-        cols_dh_to_plot = [dh_mapping[p] for p in selected_dh]
-        df_melted_dh = df_well.melt(id_vars=['Date'], value_vars=cols_dh_to_plot, var_name='Parameter', value_name='Value')
+        fig_downhole = go.Figure()
+        use_dh_y2 = False
         
-        fig_downhole = px.line(df_melted_dh, x='Date', y='Value', color='Parameter', markers=True, title="Downhole Parameters Trend")
-        fig_downhole.update_layout(xaxis_title="Tanggal", yaxis_title="Value (PSI / Hz)", hovermode="x unified")
-        fig_downhole.update_yaxes(autorange=True)
-        st.plotly_chart(fig_downhole, use_container_width=True)
-    else:
+        if "Pump Intake Pressure (PI)" in selected_dh:
+            fig_downhole.add_trace(go.Scatter(x=df_well['Date'], y=df_well['PI_PSI'], mode='lines+markers', name='Intake Press (PI - PSI)', line=dict(color='purple', width=2)))
+            
+        if "Pump Discharge Pressure (PD)" in selected_dh:
