@@ -47,7 +47,7 @@ def generate_esp_data():
             motor_temp = np.random.uniform(90, 110) + (oil_rate * 0.02) # °C
             intake_press = np.random.uniform(500, 800) - (liquid_rate * 0.1) # Psi
             vibration = np.random.uniform(0.5, 2.5) # Gs
-            frequency = np.random.choice([45, 50, 55, 60]) # Hz
+            frequency = 50.0 # Hz (Nilai default frekuensi standar)
             
             all_data.append({
                 "Date": date,
@@ -101,13 +101,10 @@ st.markdown("---")
 st.subheader("📈 Grafik Tren Produksi (30 Hari Terakhir)")
 
 fig_prod = go.Figure()
-# Line untuk Oil Rate
 fig_prod.add_trace(go.Scatter(x=df_well['Date'], y=df_well['Oil_Rate_BOPD'],
                     mode='lines+markers', name='Oil Rate (BOPD)', line=dict(color='green', width=2)))
-# Line untuk Water Rate
 fig_prod.add_trace(go.Scatter(x=df_well['Date'], y=df_well['Water_Rate_BWPD'],
                     mode='lines', name='Water Rate (BWPD)', line=dict(color='blue', width=2)))
-# Line untuk Gas Rate (Sumbu Y Kedua / Kanan jika diperlukan, di sini disatukan dulu)
 fig_prod.add_trace(go.Scatter(x=df_well['Date'], y=df_well['Gas_Rate_MSCFD'],
                     mode='lines', name='Gas Rate (MSCFD)', line=dict(color='red', dash='dash')))
 
@@ -127,15 +124,12 @@ st.subheader("⚙️ Grafik Tren Downhole Parameter")
 tab1, tab2, tab3 = st.tabs(["Temperature & Pressure", "Vibration", "Frequency"])
 
 with tab1:
-fig_tp = go.Figure()
-    # Sumbu Kiri: Temperatur
+    fig_tp = go.Figure()
     fig_tp.add_trace(go.Scatter(x=df_well['Date'], y=df_well['Motor_Temp_C'],
                         name='Motor Temp (°C)', line=dict(color='orange')))
-    # Sumbu Kanan: Tekanan
     fig_tp.add_trace(go.Scatter(x=df_well['Date'], y=df_well['Intake_Pressure_PSI'],
                         name='Intake Press (PSI)', yaxis='y2', line=dict(color='purple')))
     
-    # Layout untuk Dual Axis (Sumbu Y Ganda) - Diperbaiki Spasinya
     fig_tp.update_layout(
         yaxis=dict(
             title=dict(text='Motor Temperature (°C)', font=dict(color='orange')),
@@ -154,17 +148,16 @@ fig_tp = go.Figure()
 with tab2:
     fig_vib = px.line(df_well, x='Date', y='Vibration_G', title='Downhole Vibration Trend',
                       labels={'Vibration_G': 'Vibration (G)'}, color_discrete_sequence=['red'])
-    # Tambahkan garis batas aman vibrasi (misal aman jika di bawah 1.5 G)
     fig_vib.add_hline(y=2.0, line_dash="dash", line_color="orange", annotation_text="Warning Limit (2.0 G)")
     st.plotly_chart(fig_vib, use_container_width=True)
 
 with tab3:
-    fig_freq = px.stepline(df_well, x='Date', y='Frequency_Hz', title='VSD Frequency History',
-                          labels={'Frequency_Hz': 'Frequency (Hz)'}, color_discrete_sequence=['darkblue'])
+    fig_freq = px.line(df_well, x='Date', y='Frequency_Hz', title='VSD Frequency History',
+                       labels={'Frequency_Hz': 'Frequency (Hz)'}, color_discrete_sequence=['darkblue'])
     st.plotly_chart(fig_freq, use_container_width=True)
 
 # ==========================================
 # 7. TABEL DATA SUMUR
 # ==========================================
 with st.expander("🔍 Lihat Detail Tabel Data"):
-    st.dataframe(df_well.style.highlight_max(axis=0, color='#e6f2ff'), use_container_width=True)
+    st.dataframe(df_well, use_container_width=True)
