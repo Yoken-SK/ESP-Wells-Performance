@@ -54,7 +54,7 @@ if uploaded_file is not None:
                     continue
                 target_day_col = day_col_candidates
                 
-                # Deteksi Bulan & Tahun
+                # Deteksi Bulan & Tahun Cadangan
                 detected_month = 9
                 detected_year = 2026
                 for idx, row in df_raw_full.iloc[:header_row_idx].iterrows():
@@ -91,17 +91,14 @@ if uploaded_file is not None:
                 
                 df_clean['Raw_Day'] = df_table[target_day_col]
                 
-                # Filter baris aktif berisi angka riil produksi cairan/tekanan sumur
+                # Filter baris aktif valid
                 df_clean['Valid_Check'] = df_clean['Oil_Rate_BOPD'] + df_clean['Water_Rate_BWPD'] + df_clean['PI_PSI']
                 df_clean = df_clean[df_clean['Valid_Check'] > 0]
-                
-                # Potong baris kosong sisa penutup di ujung paling bawah lembar excel
                 df_clean = df_clean[(df_clean['Oil_Rate_BOPD'] != 0) | (df_clean['Water_Rate_BWPD'] != 0)]
                 
                 if df_clean.empty:
                     continue
                 
-                # Penyelarasan format waktu
                 def parse_date_smart(val):
                     val_str = str(val).strip()
                     if val_str.isdigit() and 1 <= int(val_str) <= 31:
@@ -126,7 +123,6 @@ if uploaded_file is not None:
                 df_clean['Motor_Temp_C'] = 95.0
                 df_clean['Vibration_G'] = 1.2
                 
-                # Simpan data final yang bersih ke kamus besar
                 all_wells_data[well_name_derived] = df_clean.sort_values('Date')
                 
             if all_wells_data:
@@ -147,14 +143,12 @@ if all_wells_data:
     
     st.subheader(f"📊 Status Terakhir Sumur: {selected_well} ({latest_data['Date'].strftime('%d-%b-%Y')})")
     
-    # Tampilan Grid KPI Atas
     col1, col2, col3, col4 = st.columns(4)
     col1.metric("Oil Rate", f"{latest_data['Oil_Rate_BOPD']:.1f} BOPD")
     col2.metric("Water Rate", f"{latest_data['Water_Rate_BWPD']:.1f} BWPD")
     col3.metric("Water Cut", f"{latest_data['Water_Cut_Percent']:.1f} %")
     col4.metric("Gas Rate", f"{latest_data['Gas_Rate_MSCFD']:.1f} MCFD")
     
-    # Tampilan Grid KPI Bawah
     col5, col6, col7, col8 = st.columns(4)
     col5.metric("Pump Intake (PI)", f"{latest_data['PI_PSI']:.1f} PSI")
     col6.metric("Pump Discharge (PD)", f"{latest_data['PD_PSI']:.1f} PSI")
@@ -164,7 +158,7 @@ if all_wells_data:
     st.markdown("---")
     
     # ==========================================
-    # 4. GRAFIK TREN PRODUKSI
+    # 4. GRAFIK TREN PRODUKSI (VERSI ULTRA-FLAT ANTI-ERROR SPASI)
     # ==========================================
     st.subheader("📈 Grafik Tren Produksi Sumur")
     
@@ -174,22 +168,24 @@ if all_wells_data:
         default=["Oil Rate (BOPD)", "Water Rate (BWPD)", "Gas Rate (MCFD)"]
     )
     
-    if selected_prod:
-        fig_prod = go.Figure()
-        use_prod_y2 = False
+    fig_prod = go.Figure()
+    
+    # Penulisan satu baris datar yang aman 100% dari distorsi spasi editor web
+    if "Oil Rate (BOPD)" in selected_prod: fig_prod.add_trace(go.Scatter(x=df_well['Date'], y=df_well['Oil_Rate_BOPD'], mode='lines+markers', name='Oil Rate (BOPD)', line=dict(color='green', width=2.5)))
+    if "Water Rate (BWPD)" in selected_prod: fig_prod.add_trace(go.Scatter(x=df_well['Date'], y=df_well['Water_Rate_BWPD'], mode='lines+markers', name='Water Rate (BWPD)', line=dict(color='blue', width=2)))
+    if "Gas Rate (MCFD)" in selected_prod: fig_prod.add_trace(go.Scatter(x=df_well['Date'], y=df_well['Gas_Rate_MSCFD'], mode='lines+markers', name='Gas Rate (MCFD)', yaxis="y2", line=dict(color='red', width=2, dash='dash')))
         
-        if "Oil Rate (BOPD)" in selected_prod:
-            fig_prod.add_trace(go.Scatter(x=df_well['Date'], y=df_well['Oil_Rate_BOPD'], mode='lines+markers', name='Oil Rate (BOPD)', line=dict(color='green', width=2.5)))
-        if "Water Rate (BWPD)" in selected_prod:
-            fig_prod.add_trace(go.Scatter(x=df_well['Date'], y=df_well['Water_Rate_BWPD'], mode='lines+markers', name='Water Rate (BWPD)', line=dict(color='blue', width=2)))
-        if "Gas Rate (MCFD)" in selected_prod:
-            fig_prod.add_trace(go.Scatter(x=df_well['Date'], y=df_well['Gas_Rate_MSCFD'], mode='lines+markers', name='Gas Rate (MCFD)', yaxis="y2", line=dict(color='red', width=2, dash='dash')))
-            use_prod_y2 = True
-            
-        prod_layout = {
-            "xaxis": dict(title="Tanggal"),
-            "yaxis": dict(title="Liquid Rate (BOPD / BWPD)", autorange=True),
-            "hovermode": "x unified",
-            "legend": dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1)
-        }
-        if use_prod_y2:
+    fig_prod.update_layout(
+        xaxis=dict(title="Tanggal"),
+        yaxis=dict(title="Liquid Rate (BOPD / BWPD)", autorange=True),
+        yaxis2=dict(title="Gas Rate (MCFD)", overlaying="y", side="right", autorange=True, matches=None),
+        hovermode="x unified",
+        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1)
+    )
+    st.plotly_chart(fig_prod, use_container_width=True)
+    
+    st.markdown("---")
+    
+    # ==========================================
+    # 5. GRAFIK DOWNHOLE PARAMETER (VERSI ULTRA-FLAT ANTI-ERROR SPASI)
+    # ==========================================
