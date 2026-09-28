@@ -2,6 +2,7 @@ import streamlit as st
 import pandas as pd
 import numpy as np
 import plotly.graph_objects as go
+import re
 
 # ==========================================
 # 1. KONFIGURASI HALAMAN DASHBOARD
@@ -52,14 +53,40 @@ if uploaded_file is not None:
                 df_table = pd.read_excel(uploaded_file, sheet_name=sheet, skiprows=header_row_idx)
                 df_table.columns = df_table.columns.str.strip().str.replace('\n', ' ').str.replace('  ', ' ')
                 
-                # Cari kolom tanggal
+                # Cari kolom tanggal (Day)
                 day_col_candidates = [c for c in df_table.columns if 'day' in c.lower() or 'date' in c.lower() or 'tgl' in c.lower()]
                 if not day_col_candidates:
                     continue
-                target_day_col = day_col_candidates
+                target_day_col = day_col_candidates[0]
                 
-                # Bersihkan baris non-tanggal
-                df_table['Clean_Date'] = pd.to_datetime(df_table[target_day_col], errors='coerce')
+                # --- DETEKSI BULAN & TAHUN DARI METADATA ATAS ---
+                detected_month = 9
+                detected_year = 2026
+                
+                for idx, row in df_raw_full.iloc[:header_row_idx].iterrows():
+                    row_cells = [str(x).strip() for x in row.values if pd.notnull(x)]
+                    for cell_text in row_cells:
+                        # Mencari pola teks tanggal seperti "February 11, 2026" atau "August 20, 2026"
+                        match = re.search(r'([A-Za-z]+)\s+(\d{1,2}),\s+(\d{4})', cell_text)
+                        if match:
+                            try:
+                                temp_date = pd.to_datetime(match.group(0), errors='coerce')
+                                if pd.notnull(temp_date):
+                                    detected_month = temp_date.month
+                                    detected_year = temp_date.year
+                            except:
+                                pass
+                
+                # --- PERBAIKAN GENERASI TANGGAL ---
+                # Bersihkan kolom Day agar hanya berisi angka integer murni
+                df_table['Clean_Day_Num'] = pd.to_numeric(df_table[target_day_col], errors='coerce')
+                df_table = df_table.dropna(subset=['Clean_Day_Num'])
+                df_table['Clean_Day_Num'] = df_table['Clean_Day_Num'].astype(int)
+                
+                # Buat format tanggal lengkap gabungan (Tahun - Bulan - Hari)
+                df_table['Clean_Date'] = df_table['Clean_Day_Num'].apply(
+                    lambda d: pd.to_datetime(f"{detected_year}-{detected_month:02d}-{d:02d}", errors='coerce')
+                )
                 df_table = df_table.dropna(subset=['Clean_Date'])
                 
                 if df_table.empty:
@@ -106,7 +133,7 @@ if uploaded_file is not None:
             if all_wells_data:
                 st.sidebar.success(f"Berhasil memuat {len(all_wells_data)} Sumur Monitoring!")
             else:
-                st.sidebar.error("Gagal mengekstrak data terstruktur dari sheet monitoring.")
+                st.sidebar.error("Gagal mengekstrak tabel data terstruktur dari sheet monitoring.")
                 
     except Exception as e:
         st.sidebar.error(f"Eror pembacaan file: {e}")
@@ -125,19 +152,19 @@ if all_wells_data:
     col1, col2, col3, col4 = st.columns(4)
     col1.metric("Oil Rate", f"{latest_data['Oil_Rate_BOPD']:.1f} BOPD")
     col2.metric("Water Rate", f"{latest_data['Water_Rate_BWPD']:.1f} BWPD")
-    st.columns(4)[2].metric("Water Cut", f"{latest_data['Water_Cut_Percent']:.1f} %")
-    st.columns(4)[3].metric("Gas Rate", f"{latest_data['Gas_Rate_MSCFD']:.1f} MCFD")
+    st.columns(4).metric("Water Cut", f"{latest_data['Water_Cut_Percent']:.1f} %")
+    st.columns(4).metric("Gas Rate", f"{latest_data['Gas_Rate_MSCFD']:.1f} MCFD")
     
     col5, col6, col7, col8 = st.columns(4)
     col5.metric("Pump Intake (PI)", f"{latest_data['PI_PSI']:.1f} PSI")
     col6.metric("Pump Discharge (PD)", f"{latest_data['PD_PSI']:.1f} PSI")
-    st.columns(4)[2].metric("VSD Frequency", f"{latest_data['Frequency_Hz']:.1f} Hz")
-    st.columns(4)[3].metric("Total Data Points", f"{len(df_well)} Hari")
+    st.columns(4).metric("VSD Frequency", f"{latest_data['Frequency_Hz']:.1f} Hz")
+    st.columns(4).metric("Total Data Points", f"{len(df_well)} Hari")
     
     st.markdown("---")
     
     # ==========================================
-    # 4. GRAFIK TREN PRODUKSI (STRUKTUR DATA FLAT ANTI-ERROR)
+    # 4. GRAFIK TREN PRODUKSI
     # ==========================================
     st.subheader("📈 Grafik Tren Produksi Sumur")
     
@@ -155,7 +182,6 @@ if all_wells_data:
     
     fig_prod = go.Figure()
     
-    # Loop rata tanpa percabangan if-else untuk sumbu Y ganda
     for k in selected_prod:
         cfg = prod_config[k]
         fig_prod.add_trace(go.Scatter(x=df_well['Date'], y=df_well[cfg["col"]], mode='lines+markers', name=k, yaxis=cfg["y"], line=dict(color=cfg["color"], width=2, dash=cfg["dash"])))
@@ -170,38 +196,5 @@ if all_wells_data:
     st.plotly_chart(fig_prod, use_container_width=True)
     
     st.markdown("---")
-    
-    # ==========================================
-    # 5. GRAFIK DOWNHOLE PARAMETER (STRUKTUR DATA FLAT ANTI-ERROR)
-    # ==========================================
-    st.subheader("⚙️ Visualisasi Tren Downhole & ESP Parameter")
-    
-    dh_config = {
-        "Pump Intake Pressure (PI)": {"col": "PI_PSI", "color": "purple", "y": "y"},
-        "Pump Discharge Pressure (PD)": {"col": "PD_PSI", "color": "teal", "y": "y"},
-        "VSD Frequency": {"col": "Frequency_Hz", "color": "darkblue", "y": "y2"}
-    }
-    
-    selected_dh = st.multiselect(
-        "Pilih Parameter Downhole yang Ingin Ditampilkan:",
-        options=list(dh_config.keys()),
-        default=["Pump Intake Pressure (PI)", "Pump Discharge Pressure (PD)"]
-    )
-    
-    fig_downhole = go.Figure()
-    
-    # Loop rata tanpa percabangan if-else untuk sumbu Y ganda
-    for k in selected_dh:
-        cfg = dh_config[k]
-        fig_downhole.add_trace(go.Scatter(x=df_well['Date'], y=df_well[cfg["col"]], mode='lines+markers', name=k, yaxis=cfg["y"], line=dict(color=cfg["color"], width=2)))
-        
-    fig_downhole.update_layout(
-        xaxis=dict(title="Tanggal"),
-        yaxis=dict(title="Pressure (PSI)", autorange=True),
-        yaxis2=dict(title="Frequency (Hz)", overlaying="y", side="right", autorange=True),
-        hovermode="x unified",
-        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1)
-    )
-    st.plotly_chart(fig_downhole, use_container_width=True)
     
     # ==========================================
