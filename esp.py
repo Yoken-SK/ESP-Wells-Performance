@@ -28,8 +28,6 @@ if uploaded_file is not None:
     try:
         excel_file = pd.ExcelFile(uploaded_file)
         sheet_names = excel_file.sheet_names
-        
-        # Filter: Hanya ambil sheet yang mengandung kata 'monitoring'
         monitoring_sheets = [s for s in sheet_names if 'monitoring' in s.lower()]
         
         if not monitoring_sheets:
@@ -38,7 +36,6 @@ if uploaded_file is not None:
             for sheet in monitoring_sheets:
                 df_raw_full = pd.read_excel(uploaded_file, sheet_name=sheet, header=None)
                 
-                # --- DETEKSI KELOMPOK TABEL SECARA DINAMIS ---
                 header_row_idx = None
                 for idx, row in df_raw_full.iterrows():
                     row_str = [str(x).strip().lower() for x in row.values if pd.notnull(x)]
@@ -49,17 +46,15 @@ if uploaded_file is not None:
                 if header_row_idx is None:
                     continue
                 
-                # Membaca tabel data utama
                 df_table = pd.read_excel(uploaded_file, sheet_name=sheet, skiprows=header_row_idx)
                 df_table.columns = df_table.columns.str.strip().str.replace('\n', ' ').str.replace('  ', ' ')
                 
-                # Cari kolom tanggal (Day/Date)
                 day_col_candidates = [c for c in df_table.columns if 'day' in c.lower() or 'date' in c.lower() or 'tgl' in c.lower() or 'time' in c.lower()]
                 if not day_col_candidates:
                     continue
                 target_day_col = day_col_candidates
                 
-                # --- DETEKSI BULAN & TAHUN DARI METADATA ---
+                # Deteksi Bulan & Tahun
                 detected_month = 9
                 detected_year = 2026
                 for idx, row in df_raw_full.iloc[:header_row_idx].iterrows():
@@ -75,7 +70,6 @@ if uploaded_file is not None:
                             except:
                                 pass
                 
-                # --- PEMETAAN (MAPPING) KOLOM ---
                 df_clean = pd.DataFrame()
                 
                 def find_and_parse_flexible(keywords, default_val=np.nan):
@@ -85,7 +79,7 @@ if uploaded_file is not None:
                             return pd.to_numeric(df_table[c], errors='coerce')
                     return pd.Series(default_val, index=df_table.index)
                 
-                # Ekstraksi Parameter Angka
+                # Ekstraksi Parameter
                 df_clean['Oil_Rate_BOPD'] = find_and_parse_flexible(['oilbopd', 'bopd', 'oil', 'bop']).fillna(0)
                 df_clean['Water_Rate_BWPD'] = find_and_parse_flexible(['waterbwpd', 'bwpd', 'water', 'bwp']).fillna(0)
                 df_clean['Water_Cut_Percent'] = find_and_parse_flexible(['watercut', 'wc%', 'wc']).fillna(0)
@@ -97,17 +91,17 @@ if uploaded_file is not None:
                 
                 df_clean['Raw_Day'] = df_table[target_day_col]
                 
-                # --- VALIDASI BARIS: Buang baris jika laju produksi DAN tekanan kosong bersamaan ---
+                # Filter baris aktif berisi angka riil produksi cairan/tekanan sumur
                 df_clean['Valid_Check'] = df_clean['Oil_Rate_BOPD'] + df_clean['Water_Rate_BWPD'] + df_clean['PI_PSI']
                 df_clean = df_clean[df_clean['Valid_Check'] > 0]
                 
-                # KUNCI GRAFIK UTAMA: Hilangkan baris-baris sisa di ujung akhir Excel jika nilainya 0 murni
-                df_clean = df_clean[(df_clean['Oil_Rate_BOPD'] != 0) | (df_clean['Water_Rate_BWPD'] != 0) | (df_clean['PI_PSI'] != 0)]
+                # Potong baris kosong sisa penutup di ujung paling bawah lembar excel
+                df_clean = df_clean[(df_clean['Oil_Rate_BOPD'] != 0) | (df_clean['Water_Rate_BWPD'] != 0)]
                 
                 if df_clean.empty:
                     continue
                 
-                # Generasi tanggal cerdas
+                # Penyelarasan format waktu
                 def parse_date_smart(val):
                     val_str = str(val).strip()
                     if val_str.isdigit() and 1 <= int(val_str) <= 31:
@@ -118,14 +112,9 @@ if uploaded_file is not None:
                     return pd.NaT
 
                 df_clean['Date'] = df_clean['Raw_Day'].apply(parse_date_smart)
+                df_clean['Date'] = df_clean['Date'].ffill().bfill()
                 
-                if df_clean['Date'].isnull().all():
-                    start_artifisial = pd.to_datetime(f"{detected_year}-{detected_month:02d}-01", errors='coerce')
-                    df_clean['Date'] = [start_artifisial + pd.Timedelta(days=i) for i in range(len(df_clean))]
-                else:
-                    df_clean['Date'] = df_clean['Date'].ffill().bfill()
-                
-                # Ekstraksi Nama Sumur
+                # Deteksi Nama Sumur
                 well_name_derived = sheet.replace('Monitoring', '').replace('monitoring', '').strip()
                 for idx, row in df_raw_full.iloc[:header_row_idx].iterrows():
                     row_cells = [str(x).strip() for x in row.values if pd.notnull(x)]
@@ -137,8 +126,8 @@ if uploaded_file is not None:
                 df_clean['Motor_Temp_C'] = 95.0
                 df_clean['Vibration_G'] = 1.2
                 
-                df_final = df_clean[['Date', 'Well_Name', 'Oil_Rate_BOPD', 'Water_Rate_BWPD', 'Water_Cut_Percent', 'Gas_Rate_MSCFD', 'PI_PSI', 'PD_PSI', 'Frequency_Hz', 'Motor_Temp_C', 'Vibration_G']]
-                all_wells_data[well_name_derived] = df_final.sort_values('Date')
+                # Simpan data final yang bersih ke kamus besar
+                all_wells_data[well_name_derived] = df_clean.sort_values('Date')
                 
             if all_wells_data:
                 st.sidebar.success(f"Berhasil memuat {len(all_wells_data)} Sumur Monitoring!")
@@ -158,14 +147,14 @@ if all_wells_data:
     
     st.subheader(f"📊 Status Terakhir Sumur: {selected_well} ({latest_data['Date'].strftime('%d-%b-%Y')})")
     
-    # Grid Utama Pertama - Menampilkan data valid hari terakhir asli sumur
+    # Tampilan Grid KPI Atas
     col1, col2, col3, col4 = st.columns(4)
     col1.metric("Oil Rate", f"{latest_data['Oil_Rate_BOPD']:.1f} BOPD")
     col2.metric("Water Rate", f"{latest_data['Water_Rate_BWPD']:.1f} BWPD")
     col3.metric("Water Cut", f"{latest_data['Water_Cut_Percent']:.1f} %")
     col4.metric("Gas Rate", f"{latest_data['Gas_Rate_MSCFD']:.1f} MCFD")
     
-    # Grid Utama Kedua
+    # Tampilan Grid KPI Bawah
     col5, col6, col7, col8 = st.columns(4)
     col5.metric("Pump Intake (PI)", f"{latest_data['PI_PSI']:.1f} PSI")
     col6.metric("Pump Discharge (PD)", f"{latest_data['PD_PSI']:.1f} PSI")
@@ -179,12 +168,28 @@ if all_wells_data:
     # ==========================================
     st.subheader("📈 Grafik Tren Produksi Sumur")
     
-    prod_config = {
-        "Oil Rate (BOPD)": {"col": "Oil_Rate_BOPD", "color": "green", "y": "y", "dash": "solid"},
-        "Water Rate (BWPD)": {"col": "Water_Rate_BWPD", "color": "blue", "y": "y", "dash": "solid"},
-        "Gas Rate (MCFD)": {"col": "Gas_Rate_MSCFD", "color": "red", "y": "y2", "dash": "dash"}
-    }
-    
     selected_prod = st.multiselect(
         "Pilih Parameter Produksi yang Ingin Ditampilkan pada Grafik:",
-        options=list(prod_config.keys()),
+        options=["Oil Rate (BOPD)", "Water Rate (BWPD)", "Gas Rate (MCFD)"],
+        default=["Oil Rate (BOPD)", "Water Rate (BWPD)", "Gas Rate (MCFD)"]
+    )
+    
+    if selected_prod:
+        fig_prod = go.Figure()
+        use_prod_y2 = False
+        
+        if "Oil Rate (BOPD)" in selected_prod:
+            fig_prod.add_trace(go.Scatter(x=df_well['Date'], y=df_well['Oil_Rate_BOPD'], mode='lines+markers', name='Oil Rate (BOPD)', line=dict(color='green', width=2.5)))
+        if "Water Rate (BWPD)" in selected_prod:
+            fig_prod.add_trace(go.Scatter(x=df_well['Date'], y=df_well['Water_Rate_BWPD'], mode='lines+markers', name='Water Rate (BWPD)', line=dict(color='blue', width=2)))
+        if "Gas Rate (MCFD)" in selected_prod:
+            fig_prod.add_trace(go.Scatter(x=df_well['Date'], y=df_well['Gas_Rate_MSCFD'], mode='lines+markers', name='Gas Rate (MCFD)', yaxis="y2", line=dict(color='red', width=2, dash='dash')))
+            use_prod_y2 = True
+            
+        prod_layout = {
+            "xaxis": dict(title="Tanggal"),
+            "yaxis": dict(title="Liquid Rate (BOPD / BWPD)", autorange=True),
+            "hovermode": "x unified",
+            "legend": dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1)
+        }
+        if use_prod_y2:
