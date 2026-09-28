@@ -125,25 +125,25 @@ if all_wells_data:
     col1, col2, col3, col4 = st.columns(4)
     col1.metric("Oil Rate", f"{latest_data['Oil_Rate_BOPD']:.1f} BOPD")
     col2.metric("Water Rate", f"{latest_data['Water_Rate_BWPD']:.1f} BWPD")
-    col3.metric("Water Cut", f"{latest_data['Water_Cut_Percent']:.1f} %")
-    col4.metric("Gas Rate", f"{latest_data['Gas_Rate_MSCFD']:.1f} MCFD")
+    st.columns(4)[2].metric("Water Cut", f"{latest_data['Water_Cut_Percent']:.1f} %")
+    st.columns(4)[3].metric("Gas Rate", f"{latest_data['Gas_Rate_MSCFD']:.1f} MCFD")
     
     col5, col6, col7, col8 = st.columns(4)
     col5.metric("Pump Intake (PI)", f"{latest_data['PI_PSI']:.1f} PSI")
     col6.metric("Pump Discharge (PD)", f"{latest_data['PD_PSI']:.1f} PSI")
-    col7.metric("VSD Frequency", f"{latest_data['Frequency_Hz']:.1f} Hz")
-    col8.metric("Total Data Points", f"{len(df_well)} Hari")
+    st.columns(4)[2].metric("VSD Frequency", f"{latest_data['Frequency_Hz']:.1f} Hz")
+    st.columns(4)[3].metric("Total Data Points", f"{len(df_well)} Hari")
     
     st.markdown("---")
     
     # ==========================================
-    # 4. GRAFIK TREN PRODUKSI (DIKUNCI MANUAL & DUAL-AXIS UNTUK GAS)
+    # 4. GRAFIK TREN PRODUKSI (STRUKTUR DATA FLAT ANTI-ERROR)
     # ==========================================
     st.subheader("📈 Grafik Tren Produksi Sumur")
     
     prod_config = {
-        "Oil Rate (BOPD)": {"col": "Oil_Rate_BOPD", "color": "green", "y": "y1", "dash": "solid"},
-        "Water Rate (BWPD)": {"col": "Water_Rate_BWPD", "color": "blue", "y": "y1", "dash": "solid"},
+        "Oil Rate (BOPD)": {"col": "Oil_Rate_BOPD", "color": "green", "y": "y", "dash": "solid"},
+        "Water Rate (BWPD)": {"col": "Water_Rate_BWPD", "color": "blue", "y": "y", "dash": "solid"},
         "Gas Rate (MCFD)": {"col": "Gas_Rate_MSCFD", "color": "red", "y": "y2", "dash": "dash"}
     }
     
@@ -154,36 +154,31 @@ if all_wells_data:
     )
     
     fig_prod = go.Figure()
-    use_prod_y2 = False
     
+    # Loop rata tanpa percabangan if-else untuk sumbu Y ganda
     for k in selected_prod:
         cfg = prod_config[k]
         fig_prod.add_trace(go.Scatter(x=df_well['Date'], y=df_well[cfg["col"]], mode='lines+markers', name=k, yaxis=cfg["y"], line=dict(color=cfg["color"], width=2, dash=cfg["dash"])))
-        if cfg["y"] == "y2":
-            use_prod_y2 = True
-            
-    prod_layout = {
-        "xaxis": dict(title="Tanggal"),
-        "yaxis": dict(title="Liquid Rate (BOPD / BWPD)", autorange=True),
-        "hovermode": "x unified",
-        "legend": dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1)
-    }
-    if use_prod_y2:
-        prod_layout["yaxis2"] = dict(title="Gas Rate (MCFD)", overlaying="y", side="right", autorange=True)
         
-    fig_prod.update_layout(**prod_layout)
+    fig_prod.update_layout(
+        xaxis=dict(title="Tanggal"),
+        yaxis=dict(title="Liquid Rate (BOPD / BWPD)", autorange=True),
+        yaxis2=dict(title="Gas Rate (MCFD)", overlaying="y", side="right", autorange=True),
+        hovermode="x unified",
+        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1)
+    )
     st.plotly_chart(fig_prod, use_container_width=True)
     
     st.markdown("---")
     
     # ==========================================
-    # 5. GRAFIK DOWNHOLE PARAMETER (VERSI LOOPER DATAR TANPA IF BERCABANG)
+    # 5. GRAFIK DOWNHOLE PARAMETER (STRUKTUR DATA FLAT ANTI-ERROR)
     # ==========================================
     st.subheader("⚙️ Visualisasi Tren Downhole & ESP Parameter")
     
     dh_config = {
-        "Pump Intake Pressure (PI)": {"col": "PI_PSI", "color": "purple", "y": "y1"},
-        "Pump Discharge Pressure (PD)": {"col": "PD_PSI", "color": "teal", "y": "y1"},
+        "Pump Intake Pressure (PI)": {"col": "PI_PSI", "color": "purple", "y": "y"},
+        "Pump Discharge Pressure (PD)": {"col": "PD_PSI", "color": "teal", "y": "y"},
         "VSD Frequency": {"col": "Frequency_Hz", "color": "darkblue", "y": "y2"}
     }
     
@@ -194,19 +189,19 @@ if all_wells_data:
     )
     
     fig_downhole = go.Figure()
-    use_dh_y2 = False
     
-    # Looper datar satu baris untuk menghilangkan risiko salah ketik spasi/tab
+    # Loop rata tanpa percabangan if-else untuk sumbu Y ganda
     for k in selected_dh:
         cfg = dh_config[k]
         fig_downhole.add_trace(go.Scatter(x=df_well['Date'], y=df_well[cfg["col"]], mode='lines+markers', name=k, yaxis=cfg["y"], line=dict(color=cfg["color"], width=2)))
-        if cfg["y"] == "y2":
-            use_dh_y2 = True
-            
-    dh_layout = {
-        "xaxis": dict(title="Tanggal"),
-        "yaxis": dict(title="Pressure (PSI)", autorange=True),
-        "hovermode": "x unified",
-        "legend": dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1)
-    }
-    if use_dh_y2:
+        
+    fig_downhole.update_layout(
+        xaxis=dict(title="Tanggal"),
+        yaxis=dict(title="Pressure (PSI)", autorange=True),
+        yaxis2=dict(title="Frequency (Hz)", overlaying="y", side="right", autorange=True),
+        hovermode="x unified",
+        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1)
+    )
+    st.plotly_chart(fig_downhole, use_container_width=True)
+    
+    # ==========================================
