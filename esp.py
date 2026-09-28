@@ -2,7 +2,6 @@ import streamlit as st
 import pandas as pd
 import numpy as np
 import plotly.express as px
-import plotly.graph_objects as go
 
 # ==========================================
 # 1. KONFIGURASI HALAMAN DASHBOARD
@@ -36,33 +35,30 @@ if uploaded_file is not None:
             st.sidebar.error("Tidak ditemukan sheet dengan nama 'Monitoring' di file ini!")
         else:
             for sheet in monitoring_sheets:
-                # Muat seluruh isi sheet sebagai matriks mentah tanpa header
                 df_raw_full = pd.read_excel(uploaded_file, sheet_name=sheet, header=None)
                 
                 # --- DETEKSI KELOMPOK TABEL SECARA DINAMIS ---
                 header_row_idx = None
                 for idx, row in df_raw_full.iterrows():
                     row_str = [str(x).strip().lower() for x in row.values if pd.notnull(x)]
-                    if 'day' in row_str:
+                    if 'day' in row_str or 'hari' in row_str:
                         header_row_idx = idx
                         break
                 
                 if header_row_idx is None:
                     continue
                 
-                # Membaca ulang sheet khusus dari baris tabel data utama ke bawah
+                # Membaca tabel data utama
                 df_table = pd.read_excel(uploaded_file, sheet_name=sheet, skiprows=header_row_idx)
-                
-                # Bersihkan nama kolom dari spasi berlebih dan enter (\n)
                 df_table.columns = df_table.columns.str.strip().str.replace('\n', ' ').str.replace('  ', ' ')
                 
-                # Cari kolom utama tanggal
-                day_col_candidates = [c for c in df_table.columns if 'day' in c.lower() or 'date' in c.lower()]
+                # Cari kolom tanggal
+                day_col_candidates = [c for c in df_table.columns if 'day' in c.lower() or 'date' in c.lower() or 'tgl' in c.lower()]
                 if not day_col_candidates:
                     continue
                 target_day_col = day_col_candidates[0]
                 
-                # Bersihkan baris non-tanggal (seperti sub-header unit atau teks kurva di bawah)
+                # Bersihkan baris non-tanggal
                 df_table['Clean_Date'] = pd.to_datetime(df_table[target_day_col], errors='coerce')
                 df_table = df_table.dropna(subset=['Clean_Date'])
                 
@@ -74,47 +70,44 @@ if uploaded_file is not None:
                 for idx, row in df_raw_full.iloc[:header_row_idx].iterrows():
                     row_cells = [str(x).strip() for x in row.values if pd.notnull(x)]
                     for cell_text in row_cells:
-                        if 'well name' in cell_text.lower():
+                        if 'well name' in cell_text.lower() or 'sumur' in cell_text.lower():
                             well_name_derived = row_cells[-1].replace(':', '').strip()
                 
-                # --- PEMETAAN (MAPPING) KOLOM STRIP KETAT ---
+                # --- PEMETAAN (MAPPING) KOLOM PERLOONGAN KATA KUNCI ---
                 df_clean = pd.DataFrame()
                 df_clean['Date'] = df_table['Clean_Date']
                 df_clean['Well_Name'] = well_name_derived
                 
-                # Fungsi pencarian kolom cerdas
-                def find_and_parse_strict(keywords, default_val=np.nan):
+                def find_and_parse_flexible(keywords, default_val=np.nan):
                     for c in df_table.columns:
-                        clean_col_name = c.lower().replace(' ', '')
-                        if any(k.replace(' ', '') in clean_col_name for k in keywords):
+                        clean_col_name = c.lower().replace(' ', '').replace('\n', '')
+                        if any(k.lower().replace(' ', '') in clean_col_name for k in keywords):
                             return pd.to_numeric(df_table[c], errors='coerce')
                     return pd.Series(default_val, index=df_table.index)
                 
                 # Ekstraksi Parameter Laju Produksi
-                df_clean['Oil_Rate_BOPD'] = find_and_parse_strict(['oilbopd', 'bopd', 'oil']).fillna(0)
-                df_clean['Water_Rate_BWPD'] = find_and_parse_strict(['waterbwpd', 'bwpd', 'water']).fillna(0)
-                df_clean['Water_Cut_Percent'] = find_and_parse_strict(['watercut', 'wc%']).fillna(0)
-                df_clean['Gas_Rate_MSCFD'] = find_and_parse_strict(['agfmcfd', 'mcfd', 'gas', 'agf']).fillna(0)
+                df_clean['Oil_Rate_BOPD'] = find_and_parse_flexible(['oilbopd', 'bopd', 'oil', 'bop']).fillna(0)
+                df_clean['Water_Rate_BWPD'] = find_and_parse_flexible(['waterbwpd', 'bwpd', 'water', 'bwp']).fillna(0)
+                df_clean['Water_Cut_Percent'] = find_and_parse_flexible(['watercut', 'wc%', 'wc']).fillna(0)
+                df_clean['Gas_Rate_MSCFD'] = find_and_parse_flexible(['agfmcfd', 'mcfd', 'gas', 'agf', 'gascf']).fillna(0)
                 
-                # Ekstraksi Parameter Tekanan Pompa Downhole & Freq
-                df_clean['PI_PSI'] = find_and_parse_strict(['pintake', 'pip', 'intake', 'pintakepsi']).ffill().fillna(0)
-                df_clean['PD_PSI'] = find_and_parse_strict(['pdischarge', 'pdp', 'discharge', 'pdischargepsi']).ffill().fillna(0)
-                df_clean['Frequency_Hz'] = find_and_parse_strict(['freqhz', 'hz', 'freq'], default_val=40).fillna(40)
+                # Ekstraksi Parameter Tekanan Pompa Downhole & Freq (KATA KUNCI DIPERLUAS: PINTAKE, PIP, PDISHCARGE, PDP)
+                df_clean['PI_PSI'] = find_and_parse_flexible(['pintake', 'pip', 'intake', 'pintakepsi', 'p.intake']).ffill().bfill().fillna(0)
+                df_clean['PD_PSI'] = find_and_parse_flexible(['pdischarge', 'pdp', 'discharge', 'pdischargepsi', 'p.discharge']).ffill().bfill().fillna(0)
+                df_clean['Frequency_Hz'] = find_and_parse_flexible(['freqhz', 'hz', 'freq', 'vsd'], default_val=40).ffill().bfill().fillna(40)
                 
-                # Parameter Baseline Tambahan
+                # Parameter Tambahan
                 df_clean['Motor_Temp_C'] = 95.0
                 df_clean['Vibration_G'] = 1.2
                 
-                # Filter data valid agar grafik skala otomatisnya bekerja sempurna
-                df_clean = df_clean[(df_clean['Oil_Rate_BOPD'] > 0) | (df_clean['PI_PSI'] > 0)]
-                
+                # KUNCI UTAMA: Hapus filter ketat '> 0' agar data downhole yang bernilai 0 di awal/akhir tidak memicu error blank
                 if not df_clean.empty:
                     all_wells_data[well_name_derived] = df_clean.sort_values('Date')
                 
             if all_wells_data:
                 st.sidebar.success(f"Berhasil memuat {len(all_wells_data)} Sumur Monitoring!")
             else:
-                st.sidebar.error("Gagal mengekstrak data terstruktur dari sheet monitoring.")
+                st.sidebar.error("Gagal mengekstrak data. Periksa apakah baris data kosong atau format kolom bergeser.")
                 
     except Exception as e:
         st.sidebar.error(f"Eror pembacaan file: {e}")
@@ -145,11 +138,10 @@ if all_wells_data:
     st.markdown("---")
     
     # ==========================================
-    # 4. GRAFIK TREN PRODUKSI (MENGGUNAKAN PLOTLY EXPRESS YANG RINGKAS)
+    # 4. GRAFIK TREN PRODUKSI
     # ==========================================
     st.subheader("📈 Grafik Tren Produksi Sumur")
     
-    # Mapping Pilihan ke Kolom Asli Dataframe
     prod_mapping = {"Oil Rate (BOPD)": "Oil_Rate_BOPD", "Water Rate (BWPD)": "Water_Rate_BWPD", "Gas Rate (MCFD)": "Gas_Rate_MSCFD"}
     
     selected_prod = st.multiselect(
@@ -159,11 +151,9 @@ if all_wells_data:
     )
     
     if selected_prod:
-        # Mengubah data ke format panjang (melt) agar Plotly Express bisa memplot secara otomatis tanpa error spasi
         cols_to_plot = [prod_mapping[p] for p in selected_prod]
         df_melted_prod = df_well.melt(id_vars=['Date'], value_vars=cols_to_plot, var_name='Parameter', value_name='Rate Value')
         
-        # Membuat grafik garis dalam 1 baris kode tunggal yang sangat aman
         fig_prod = px.line(df_melted_prod, x='Date', y='Rate Value', color='Parameter', markers=True, title="Historical Production Trend")
         fig_prod.update_layout(xaxis_title="Tanggal", yaxis_title="Rate Value", hovermode="x unified")
         fig_prod.update_yaxes(autorange=True)
@@ -174,11 +164,10 @@ if all_wells_data:
     st.markdown("---")
     
     # ==========================================
-    # 5. GRAFIK DOWNHOLE PARAMETER (MENGGUNAKAN PLOTLY EXPRESS YANG RINGKAS)
+    # 5. GRAFIK DOWNHOLE PARAMETER
     # ==========================================
     st.subheader("⚙️ Visualisasi Tren Downhole & ESP Parameter")
     
-    # Mapping Pilihan ke Kolom Asli Dataframe
     dh_mapping = {"Pump Intake Pressure (PI)": "PI_PSI", "Pump Discharge Pressure (PD)": "PD_PSI", "VSD Frequency": "Frequency_Hz"}
     
     selected_dh = st.multiselect(
@@ -188,10 +177,20 @@ if all_wells_data:
     )
     
     if selected_dh:
-        # Mengubah data ke format panjang (melt)
         cols_dh_to_plot = [dh_mapping[p] for p in selected_dh]
         df_melted_dh = df_well.melt(id_vars=['Date'], value_vars=cols_dh_to_plot, var_name='Parameter', value_name='Value')
         
-        # Membuat grafik garis downhole dalam 1 baris kode tunggal yang sangat aman
         fig_downhole = px.line(df_melted_dh, x='Date', y='Value', color='Parameter', markers=True, title="Downhole Parameters Trend")
         fig_downhole.update_layout(xaxis_title="Tanggal", yaxis_title="Value (PSI / Hz)", hovermode="x unified")
+        fig_downhole.update_yaxes(autorange=True)
+        st.plotly_chart(fig_downhole, use_container_width=True)
+    else:
+        st.warning("Silakan centang opsi parameter di atas untuk memuat bagan grafik.")
+        
+    # ==========================================
+    # 6. TABEL DETAIL DATA KESELURUHAN
+    # ==========================================
+    with st.expander("🔍 Lihat Detail Tabel Data Bersih"):
+        st.dataframe(df_well, use_container_width=True)
+else:
+    st.info("Silakan unggah berkas laporan Excel sumur ESP Anda melalui panel sidebar untuk memulai visualisasi monitoring.")
