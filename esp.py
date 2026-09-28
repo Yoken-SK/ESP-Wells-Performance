@@ -97,8 +97,8 @@ if uploaded_file is not None:
                 df_clean['Gas_Rate_MSCFD'] = find_and_parse_strict(['agfmcfd', 'mcfd', 'gas', 'agf']).fillna(0)
                 
                 # Ekstraksi Parameter Tekanan Pompa Downhole & Freq
-                df_clean['PI_PSI'] = find_and_parse_strict(['pintake', 'pip', 'intake', 'pintakepsi']).fillna(method='ffill').fillna(0)
-                df_clean['PD_PSI'] = find_and_parse_strict(['pdischarge', 'pdp', 'discharge', 'pdischargepsi']).fillna(method='ffill').fillna(0)
+                df_clean['PI_PSI'] = find_and_parse_strict(['pintake', 'pip', 'intake', 'pintakepsi']).ffill().fillna(0)
+                df_clean['PD_PSI'] = find_and_parse_strict(['pdischarge', 'pdp', 'discharge', 'pdischargepsi']).ffill().fillna(0)
                 df_clean['Frequency_Hz'] = find_and_parse_strict(['freqhz', 'hz', 'freq'], default_val=40).fillna(40)
                 
                 # Parameter Baseline Tambahan
@@ -145,7 +145,7 @@ if all_wells_data:
     st.markdown("---")
     
     # ==========================================
-    # 4. GRAFIK TREN PRODUKSI (DENGAN MULTISELECT OIL, WATER, GAS)
+    # 4. GRAFIK TREN PRODUKSI
     # ==========================================
     st.subheader("📈 Grafik Tren Produksi Sumur")
     
@@ -161,36 +161,33 @@ if all_wells_data:
         default=["Oil Rate (BOPD)", "Water Rate (BWPD)"]
     )
     
-    if not selected_prod_params:
-        st.warning("Silakan pilih minimal satu parameter produksi untuk menampilkan grafik.")
-    else:
-        fig_prod = go.Figure()
-        use_prod_y2 = False
-        
-        for param in selected_prod_params:
-            cfg = prod_options[param]
-            is_y2 = (cfg["axis"] == "y2")
-            fig_prod.add_trace(go.Scatter(
-                x=df_well['Date'], 
-                y=df_well[cfg["col"]], 
-                mode='lines+markers', 
-                name=param, 
-                yaxis="y2" if is_y2 else "y",
-                line=dict(color=cfg["color"], width=2, dash=cfg["dash"])
-            ))
-            if is_y2:
-                use_prod_y2 = True
-                
-        prod_layout = {
-            "xaxis": dict(title="Tanggal"),
-            "yaxis": dict(title="Liquid Rate (BOPD / BWPD)", autorange=True),
-            "hovermode": "x unified"
-        }
-        if use_prod_y2:
-            prod_layout["yaxis2"] = dict(title="Gas Rate (MCFD)", overlaying="y", side="right", autorange=True)
+    fig_prod = go.Figure()
+    use_prod_y2 = False
+    
+    for param in selected_prod_params:
+        cfg = prod_options[param]
+        is_y2 = (cfg["axis"] == "y2")
+        fig_prod.add_trace(go.Scatter(
+            x=df_well['Date'], 
+            y=df_well[cfg["col"]], 
+            mode='lines+markers', 
+            name=param, 
+            yaxis="y2" if is_y2 else "y",
+            line=dict(color=cfg["color"], width=2, dash=cfg["dash"])
+        ))
+        if is_y2:
+            use_prod_y2 = True
             
-        fig_prod.update_layout(**prod_layout)
-        st.plotly_chart(fig_prod, use_container_width=True)
+    prod_layout = {
+        "xaxis": dict(title="Tanggal"),
+        "yaxis": dict(title="Liquid Rate (BOPD / BWPD)", autorange=True),
+        "hovermode": "x unified"
+    }
+    if use_prod_y2:
+        prod_layout["yaxis2"] = dict(title="Gas Rate (MCFD)", overlaying="y", side="right", autorange=True)
+        
+    fig_prod.update_layout(**prod_layout)
+    st.plotly_chart(fig_prod, use_container_width=True)
     
     # ==========================================
     # 5. GRAFIK DOWNHOLE DENGAN FITUR MULTISELECT
@@ -209,4 +206,15 @@ if all_wells_data:
         default=["Pump Intake Pressure (PI)", "Pump Discharge Pressure (PD)"]
     )
     
-    if not selected_params:
+    fig_downhole = go.Figure()
+    use_dh_y2 = False
+    
+    for param in selected_params:
+        cfg = downhole_options[param]
+        is_y2 = (cfg["axis"] == "y2")
+        fig_downhole.add_trace(go.Scatter(
+            x=df_well['Date'], 
+            y=df_well[cfg["col"]], 
+            mode='lines+markers', 
+            name=param, 
+            yaxis="y2" if is_y2 else "y",
