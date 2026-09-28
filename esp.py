@@ -97,9 +97,12 @@ if uploaded_file is not None:
                 
                 df_clean['Raw_Day'] = df_table[target_day_col]
                 
-                # Filter baris aktif dari penanda volume fluida
-                df_clean['Liquid_Total'] = df_clean['Oil_Rate_BOPD'] + df_clean['Water_Rate_BWPD'] + df_clean['PI_PSI']
-                df_clean = df_clean[df_clean['Liquid_Total'] > 0]
+                # --- VALIDASI BARIS: Buang baris jika laju produksi DAN tekanan kosong bersamaan ---
+                df_clean['Valid_Check'] = df_clean['Oil_Rate_BOPD'] + df_clean['Water_Rate_BWPD'] + df_clean['PI_PSI']
+                df_clean = df_clean[df_clean['Valid_Check'] > 0]
+                
+                # KUNCI GRAFIK UTAMA: Hilangkan baris-baris sisa di ujung akhir Excel jika nilainya 0 murni
+                df_clean = df_clean[(df_clean['Oil_Rate_BOPD'] != 0) | (df_clean['Water_Rate_BWPD'] != 0) | (df_clean['PI_PSI'] != 0)]
                 
                 if df_clean.empty:
                     continue
@@ -155,14 +158,14 @@ if all_wells_data:
     
     st.subheader(f"📊 Status Terakhir Sumur: {selected_well} ({latest_data['Date'].strftime('%d-%b-%Y')})")
     
-    # Grid Utama Pertama - Diperbaiki Penulisannya agar Stabil
+    # Grid Utama Pertama - Menampilkan data valid hari terakhir asli sumur
     col1, col2, col3, col4 = st.columns(4)
     col1.metric("Oil Rate", f"{latest_data['Oil_Rate_BOPD']:.1f} BOPD")
     col2.metric("Water Rate", f"{latest_data['Water_Rate_BWPD']:.1f} BWPD")
     col3.metric("Water Cut", f"{latest_data['Water_Cut_Percent']:.1f} %")
     col4.metric("Gas Rate", f"{latest_data['Gas_Rate_MSCFD']:.1f} MCFD")
     
-    # Grid Utama Kedua - Diperbaiki Penulisannya agar Stabil
+    # Grid Utama Kedua
     col5, col6, col7, col8 = st.columns(4)
     col5.metric("Pump Intake (PI)", f"{latest_data['PI_PSI']:.1f} PSI")
     col6.metric("Pump Discharge (PD)", f"{latest_data['PD_PSI']:.1f} PSI")
@@ -185,11 +188,3 @@ if all_wells_data:
     selected_prod = st.multiselect(
         "Pilih Parameter Produksi yang Ingin Ditampilkan pada Grafik:",
         options=list(prod_config.keys()),
-        default=["Oil Rate (BOPD)", "Water Rate (BWPD)"]
-    )
-    
-    fig_prod = go.Figure()
-    
-    for k in selected_prod:
-        cfg = prod_config[k]
-        fig_prod.add_trace(go.Scatter(x=df_well['Date'], y=df_well[cfg["col"]], mode='lines+markers', name=k, yaxis=cfg["y"], line=dict(color=cfg["color"], width=2, dash=cfg["dash"])))
