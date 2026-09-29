@@ -164,7 +164,7 @@ if all_wells_data:
     
     with col_graph:
         # ==========================================
-        # 4. GRAFIK TREN PRODUKSI (STRUKTUR SATU INDEKS HIERARKI - DIJAMIN MUNCUL)
+        # 4. GRAFIK TREN PRODUKSI (PERBAIKAN TOTAL SYSTEM DUAL-AXIS)
         # ==========================================
         st.subheader("📈 Grafik Tren Produksi Sumur")
         selected_prod = st.multiselect("Pilih Parameter Produksi:", options=["Oil Rate (BOPD)", "Water Rate (BWPD)", "Gas Rate (MCFD)"], default=["Oil Rate (BOPD)", "Water Rate (BWPD)", "Gas Rate (MCFD)"])
@@ -176,10 +176,9 @@ if all_wells_data:
         if "Water Rate (BWPD)" in selected_prod:
             fig_prod.add_trace(go.Scatter(x=df_well['Date'], y=df_well['Water_Rate_BWPD'], mode='lines+markers', name='Water Rate (BWPD)', line=dict(color='blue', width=2)))
         if "Gas Rate (MCFD)" in selected_prod:
+            # Menggunakan yaxis='y2' untuk memplot gas di sumbu kanan luar
             fig_prod.add_trace(go.Scatter(x=df_well['Date'], y=df_well['Gas_Rate_MSCFD'], mode='lines+markers', name='Gas Rate (MCFD)', yaxis="y2", line=dict(color='red', width=2, dash='dash')))
             
-        fig_prod.layout.xaxis.title = "Tanggal"
-        fig_prod.layout.yaxis.title = "Liquid Rate (BOPD / BWPD)"
-        fig_prod.layout.yaxis.autorange = True
-        fig_prod.layout.yaxis2.title = "Gas Rate (MCFD)"
-        fig_prod.layout.yaxis2.overlaying = "y"
+        # PENGATURAN TOTAL LAYOUT AMAN (Menggunakan metode dict langsung di dalam update_layout yang lolos validasi)
+        fig_prod.update_layout(
+            xaxis=dict(title="Tanggal"),
