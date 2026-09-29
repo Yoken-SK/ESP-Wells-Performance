@@ -2,7 +2,6 @@ import streamlit as st
 import pandas as pd
 import numpy as np
 import plotly.graph_objects as go
-from plotly.subplots import make_subplots
 import re
 
 # ==========================================
@@ -14,7 +13,7 @@ st.title("⚡ ESP Production & Downhole Monitoring Dashboard")
 st.markdown("Dashboard otomatis mendeteksi sheet berlabel **'Monitoring'** dari file Excel lapangan Anda.")
 
 # ==========================================
-# 2. SIDEBAR UNGHAH EXCEL MULTI-SHEET
+# 2. SIDEBAR UPLOAD EXCEL MULTI-SHEET
 # ==========================================
 st.sidebar.header("📁 Unggah Laporan Lapangan")
 uploaded_file = st.sidebar.file_uploader("Upload File Excel (.xlsx)", type=["xlsx"])
@@ -51,7 +50,7 @@ if uploaded_file is not None:
                     continue
                 target_day_col = day_col_candidates
                 
-                # Deteksi Waktu Konteks Sesuai Gambar Riwayat Atas
+                # Deteksi Bulan & Tahun Cadangan
                 detected_month = 9
                 detected_year = 2026
                 for idx, row in df_raw_full.iloc[:header_row_idx].iterrows():
@@ -76,18 +75,19 @@ if uploaded_file is not None:
                             return pd.to_numeric(df_table[c], errors='coerce')
                     return pd.Series(default_val, index=df_table.index)
                 
-                # Pemetaan Parameter Fluida Produksi
+                # Ekstraksi Parameter Lapangan
                 df_clean['Oil_Rate_BOPD'] = find_and_parse_flexible(['oilbopd', 'bopd', 'oil', 'bop'])
                 df_clean['Water_Rate_BWPD'] = find_and_parse_flexible(['waterbwpd', 'bwpd', 'water', 'bwp'])
                 df_clean['Water_Cut_Percent'] = find_and_parse_flexible(['watercut', 'wc%', 'wc']).fillna(0)
                 df_clean['Gas_Rate_MSCFD'] = find_and_parse_flexible(['agfmcfd', 'mcfd', 'gas', 'agf', 'gascf']).fillna(0)
                 
-                # Pemetaan Parameter Tekanan & Frekuensi Pompa
                 df_clean['PI_PSI'] = find_and_parse_flexible(['pintake', 'pip', 'intake', 'pintakepsi', 'p.intake'])
                 df_clean['PD_PSI'] = find_and_parse_flexible(['pdischarge', 'pdp', 'discharge', 'pdischargepsi', 'p.discharge'])
                 df_clean['Frequency_Hz'] = find_and_parse_flexible(['freqhz', 'hz', 'freq', 'vsd'], default_val=40).ffill().bfill().fillna(40)
                 
                 df_clean['Raw_Day'] = df_table[target_day_col]
+                
+                # Pembersihan data baris teks unit
                 df_clean = df_clean.dropna(subset=['Oil_Rate_BOPD', 'Water_Rate_BWPD'], how='all')
                 
                 df_clean['PI_PSI'] = df_clean['PI_PSI'].ffill().bfill().fillna(0)
@@ -113,7 +113,7 @@ if uploaded_file is not None:
                 df_clean['Date'] = df_clean['Raw_Day'].apply(parse_date_smart)
                 df_clean['Date'] = df_clean['Date'].ffill().bfill()
                 
-                # Pemotongan Tag Label Sumur
+                # Deteksi Nama Sumur
                 well_name_derived = sheet.replace('Monitoring', '').replace('monitoring', '').strip()
                 for idx, row in df_raw_full.iloc[:header_row_idx].iterrows():
                     row_cells = [str(x).strip() for x in row.values if pd.notnull(x)]
@@ -130,13 +130,13 @@ if uploaded_file is not None:
             if all_wells_data:
                 st.sidebar.success(f"Berhasil memuat {len(all_wells_data)} Sumur Monitoring!")
             else:
-                st.sidebar.error("Gagal mengekstrak data terstruktur.")
+                st.sidebar.error("Gagal mengekstrak data dari sheet monitoring.")
                 
     except Exception as e:
         st.sidebar.error(f"Eror pembacaan file: {e}")
 
 # ==========================================
-# 3. INTERFAS UTAMA (KPI DISPLAY)
+# 3. INTERFAS / TAMPILAN UTAMA DASHBOARD
 # ==========================================
 if all_wells_data:
     selected_well = st.sidebar.selectbox("Pilih Sumur ESP:", list(all_wells_data.keys()))
@@ -145,14 +145,12 @@ if all_wells_data:
     
     st.subheader(f"📊 Status Terakhir Sumur: {selected_well} ({latest_data['Date'].strftime('%d-%b-%Y')})")
     
-    # Baris Grid KPI Atas
     col1, col2, col3, col4 = st.columns(4)
     col1.metric("Oil Rate", f"{latest_data['Oil_Rate_BOPD']:.1f} BOPD")
     col2.metric("Water Rate", f"{latest_data['Water_Rate_BWPD']:.1f} BWPD")
     col3.metric("Water Cut", f"{latest_data['Water_Cut_Percent']:.1f} %")
     col4.metric("Gas Rate", f"{latest_data['Gas_Rate_MSCFD']:.1f} MCFD")
     
-    # Baris Grid KPI Bawah
     col5, col6, col7, col8 = st.columns(4)
     col5.metric("Pump Intake (PI)", f"{latest_data['PI_PSI']:.1f} PSI")
     col6.metric("Pump Discharge (PD)", f"{latest_data['PD_PSI']:.1f} PSI")
@@ -161,20 +159,27 @@ if all_wells_data:
     
     st.markdown("---")
     
-    # Pemisahan Layout Atas: Kiri Grafik Produksi, Kanan Diagram Skematik
+    # Memisahkan area visualisasi menjadi 2 kolom utama (Grafik Produksi & Skematik)
     col_graph, col_anim = st.columns(2)
     
     with col_graph:
+        # ==========================================
+        # 4. GRAFIK TREN PRODUKSI (STRUKTUR SATU INDEKS HIERARKI - DIJAMIN MUNCUL)
+        # ==========================================
         st.subheader("📈 Grafik Tren Produksi Sumur")
         selected_prod = st.multiselect("Pilih Parameter Produksi:", options=["Oil Rate (BOPD)", "Water Rate (BWPD)", "Gas Rate (MCFD)"], default=["Oil Rate (BOPD)", "Water Rate (BWPD)", "Gas Rate (MCFD)"])
         
-        fig_prod = make_subplots(specs=[[{"secondary_y": True}]])
+        fig_prod = go.Figure()
+        
         if "Oil Rate (BOPD)" in selected_prod:
-            fig_prod.add_trace(go.Scatter(x=df_well['Date'], y=df_well['Oil_Rate_BOPD'], mode='lines+markers', name='Oil Rate (BOPD)', line=dict(color='green', width=2.5)), secondary_y=False)
+            fig_prod.add_trace(go.Scatter(x=df_well['Date'], y=df_well['Oil_Rate_BOPD'], mode='lines+markers', name='Oil Rate (BOPD)', line=dict(color='green', width=2.5)))
         if "Water Rate (BWPD)" in selected_prod:
-            fig_prod.add_trace(go.Scatter(x=df_well['Date'], y=df_well['Water_Rate_BWPD'], mode='lines+markers', name='Water Rate (BWPD)', line=dict(color='blue', width=2)), secondary_y=False)
+            fig_prod.add_trace(go.Scatter(x=df_well['Date'], y=df_well['Water_Rate_BWPD'], mode='lines+markers', name='Water Rate (BWPD)', line=dict(color='blue', width=2)))
         if "Gas Rate (MCFD)" in selected_prod:
-            fig_prod.add_trace(go.Scatter(x=df_well['Date'], y=df_well['Gas_Rate_MSCFD'], mode='lines+markers', name='Gas Rate (MCFD)', line=dict(color='red', width=2, dash='dash')), secondary_y=True)
+            fig_prod.add_trace(go.Scatter(x=df_well['Date'], y=df_well['Gas_Rate_MSCFD'], mode='lines+markers', name='Gas Rate (MCFD)', yaxis="y2", line=dict(color='red', width=2, dash='dash')))
             
-        fig_prod.update_layout(xaxis_title="Tanggal", hovermode="x unified", legend=dict(orientation="h", y=1.1, x=0.5, xanchor="center"))
-        fig_prod.update_yaxes(title_text="Liquid Rate (BOPD / BWPD)", secondary_y=False, autorange=True)
+        fig_prod.layout.xaxis.title = "Tanggal"
+        fig_prod.layout.yaxis.title = "Liquid Rate (BOPD / BWPD)"
+        fig_prod.layout.yaxis.autorange = True
+        fig_prod.layout.yaxis2.title = "Gas Rate (MCFD)"
+        fig_prod.layout.yaxis2.overlaying = "y"
