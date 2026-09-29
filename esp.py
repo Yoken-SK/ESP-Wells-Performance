@@ -75,7 +75,7 @@ if uploaded_file is not None:
                             return pd.to_numeric(df_table[c], errors='coerce')
                     return pd.Series(default_val, index=df_table.index)
                 
-                # Ekstraksi Parameter
+                # Ekstraksi Parameter Lapangan
                 df_clean['Oil_Rate_BOPD'] = find_and_parse_flexible(['oilbopd', 'bopd', 'oil', 'bop'])
                 df_clean['Water_Rate_BWPD'] = find_and_parse_flexible(['waterbwpd', 'bwpd', 'water', 'bwp'])
                 df_clean['Water_Cut_Percent'] = find_and_parse_flexible(['watercut', 'wc%', 'wc']).fillna(0)
@@ -87,7 +87,7 @@ if uploaded_file is not None:
                 
                 df_clean['Raw_Day'] = df_table[target_day_col]
                 
-                # Pembersihan data teks pengganggu
+                # Pembersihan data baris teks unit
                 df_clean = df_clean.dropna(subset=['Oil_Rate_BOPD', 'Water_Rate_BWPD'], how='all')
                 
                 df_clean['PI_PSI'] = df_clean['PI_PSI'].ffill().bfill().fillna(0)
@@ -160,24 +160,20 @@ if all_wells_data:
     st.markdown("---")
     
     # Grid Layout untuk Menjajarkan Grafik Produksi dengan Skematik Animasi Pompa Sumur ESP
-    col_graph, col_anim = st.columns([2, 1])
+    col_graph, col_anim = st.columns([3, 1])
     
     with col_graph:
         # ==========================================
-        # 4. GRAFIK TREN PRODUKSI
+        # 4. GRAFIK TREN PRODUKSI (DIKUNCI DAN FIX AXIS)
         # ==========================================
         st.subheader("📈 Grafik Tren Produksi Sumur")
         selected_prod = st.multiselect("Pilih Parameter Produksi:", options=["Oil Rate (BOPD)", "Water Rate (BWPD)", "Gas Rate (MCFD)"], default=["Oil Rate (BOPD)", "Water Rate (BWPD)", "Gas Rate (MCFD)"])
+        
         fig_prod = go.Figure()
         if "Oil Rate (BOPD)" in selected_prod: fig_prod.add_trace(go.Scatter(x=df_well['Date'], y=df_well['Oil_Rate_BOPD'], mode='lines+markers', name='Oil Rate (BOPD)', line=dict(color='green', width=2.5)))
         if "Water Rate (BWPD)" in selected_prod: fig_prod.add_trace(go.Scatter(x=df_well['Date'], y=df_well['Water_Rate_BWPD'], mode='lines+markers', name='Water Rate (BWPD)', line=dict(color='blue', width=2)))
         if "Gas Rate (MCFD)" in selected_prod: fig_prod.add_trace(go.Scatter(x=df_well['Date'], y=df_well['Gas_Rate_MSCFD'], mode='lines+markers', name='Gas Rate (MCFD)', yaxis="y2", line=dict(color='red', width=2, dash='dash')))
             
-        fig_prod.layout.xaxis.title = "Tanggal"
-        fig_prod.layout.yaxis.title = "Liquid Rate (BOPD / BWPD)"
-        fig_prod.layout.yaxis.autorange = True
-        fig_prod.layout.yaxis2.title = "Gas Rate (MCFD)"
-        fig_prod.layout.yaxis2.overlaying = "y"
-        fig_prod.layout.yaxis2.side = "right"
-        fig_prod.layout.yaxis2.autorange = True
-        fig_prod.layout.hovermode = "x unified"
+        # Perbaikan Total Menggunakan Fungsi Resmi update_layout (Satu Baris Datar)
+        fig_prod.update_layout(xaxis_title="Tanggal", yaxis_title="Liquid Rate (BOPD / BWPD)", yaxis2_title="Gas Rate (MCFD)", yaxis2_overlaying="y", yaxis2_side="right", hovermode="x unified")
+        fig_prod.update_layout(legend=dict(orientation="h", y=1.05, x=1.0))
