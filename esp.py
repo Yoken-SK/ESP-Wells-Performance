@@ -160,7 +160,7 @@ if all_wells_data:
     st.markdown("---")
     
     # Grid Layout untuk Menjajarkan Grafik Produksi dengan Skematik Animasi Pompa Sumur ESP
-    col_graph, col_anim = st.columns([3, 1])
+    col_graph, col_anim = st.columns()
     
     with col_graph:
         # ==========================================
@@ -174,6 +174,7 @@ if all_wells_data:
         if "Water Rate (BWPD)" in selected_prod: fig_prod.add_trace(go.Scatter(x=df_well['Date'], y=df_well['Water_Rate_BWPD'], mode='lines+markers', name='Water Rate (BWPD)', line=dict(color='blue', width=2)))
         if "Gas Rate (MCFD)" in selected_prod: fig_prod.add_trace(go.Scatter(x=df_well['Date'], y=df_well['Gas_Rate_MSCFD'], mode='lines+markers', name='Gas Rate (MCFD)', yaxis="y2", line=dict(color='red', width=2, dash='dash')))
             
-        # Perbaikan Total Menggunakan Fungsi Resmi update_layout (Satu Baris Datar)
-        fig_prod.update_layout(xaxis_title="Tanggal", yaxis_title="Liquid Rate (BOPD / BWPD)", yaxis2_title="Gas Rate (MCFD)", yaxis2_overlaying="y", yaxis2_side="right", hovermode="x unified")
+        # Perbaikan Total Menggunakan Fungsi Standar Terpisah yang Didukung Semua Versi Plotly
+        fig_prod.update_layout(xaxis_title="Tanggal", hovermode="x unified")
         fig_prod.update_layout(legend=dict(orientation="h", y=1.05, x=1.0))
+        fig_prod.update_yaxes(title_text="Liquid Rate (BOPD / BWPD)", secondary_y=False)
