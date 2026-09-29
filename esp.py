@@ -2,6 +2,7 @@ import streamlit as st
 import pandas as pd
 import numpy as np
 import plotly.graph_objects as go
+from plotly.subplots import make_subplots
 import re
 
 # ==========================================
@@ -159,23 +160,24 @@ if all_wells_data:
     
     st.markdown("---")
     
-    # PERBAIKAN: Memasukkan angka 2 ke dalam st.columns agar layar terbagi dengan benar
+    # Memisahkan area visualisasi menjadi 2 kolom utama (Grafik Produksi & Skematik)
     col_graph, col_anim = st.columns(2)
     
     with col_graph:
         # ==========================================
-        # 4. GRAFIK TREN PRODUKSI
+        # 4. GRAFIK TREN PRODUKSI (MENGGUNAKAN MAKE_SUBPLOTS YANG DIJAMIN MUNCUL)
         # ==========================================
         st.subheader("📈 Grafik Tren Produksi Sumur")
         selected_prod = st.multiselect("Pilih Parameter Produksi:", options=["Oil Rate (BOPD)", "Water Rate (BWPD)", "Gas Rate (MCFD)"], default=["Oil Rate (BOPD)", "Water Rate (BWPD)", "Gas Rate (MCFD)"])
         
-        fig_prod = go.Figure()
-        if "Oil Rate (BOPD)" in selected_prod: fig_prod.add_trace(go.Scatter(x=df_well['Date'], y=df_well['Oil_Rate_BOPD'], mode='lines+markers', name='Oil Rate (BOPD)', line=dict(color='green', width=2.5)))
-        if "Water Rate (BWPD)" in selected_prod: fig_prod.add_trace(go.Scatter(x=df_well['Date'], y=df_well['Water_Rate_BWPD'], mode='lines+markers', name='Water Rate (BWPD)', line=dict(color='blue', width=2)))
-        if "Gas Rate (MCFD)" in selected_prod: fig_prod.add_trace(go.Scatter(x=df_well['Date'], y=df_well['Gas_Rate_MSCFD'], mode='lines+markers', name='Gas Rate (MCFD)', yaxis="y2", line=dict(color='red', width=2, dash='dash')))
+        # Pemicu sumbu ganda resmi Plotly
+        fig_prod = make_subplots(specs=[[{"secondary_y": True}]])
+        
+        if "Oil Rate (BOPD)" in selected_prod:
+            fig_prod.add_trace(go.Scatter(x=df_well['Date'], y=df_well['Oil_Rate_BOPD'], mode='lines+markers', name='Oil Rate (BOPD)', line=dict(color='green', width=2.5)), secondary_y=False)
+        if "Water Rate (BWPD)" in selected_prod:
+            fig_prod.add_trace(go.Scatter(x=df_well['Date'], y=df_well['Water_Rate_BWPD'], mode='lines+markers', name='Water Rate (BWPD)', line=dict(color='blue', width=2)), secondary_y=False)
+        if "Gas Rate (MCFD)" in selected_prod:
+            fig_prod.add_trace(go.Scatter(x=df_well['Date'], y=df_well['Gas_Rate_MSCFD'], mode='lines+markers', name='Gas Rate (MCFD)', line=dict(color='red', width=2, dash='dash')), secondary_y=True)
             
-        # Perbaikan Total Susunan Properti Sumbu Ganda Tanpa Parameter ValueError
-        fig_prod.update_layout(xaxis_title="Tanggal", hovermode="x unified")
-        fig_prod.update_layout(legend=dict(orientation="h", y=1.05, x=1.0))
-        fig_prod.update_yaxes(title_text="Liquid Rate (BOPD / BWPD)")
-        fig_prod.update_yaxes(title_text="Gas Rate (MCFD)", overlaying="y", side="right")
+        fig_prod.update_layout(xaxis_title="Tanggal", hovermode="x unified", legend=dict(orientation="h", y=1.1, x=0.5, xanchor="center"))
