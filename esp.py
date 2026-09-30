@@ -9,7 +9,6 @@ import streamlit as st
 # ==========================================
 st.set_page_config(page_title="ESP Well Dashboard", layout="wide")
 
-# Custom CSS untuk merapikan ukuran metric dan kontainer
 st.markdown(
     """
     <style>
@@ -29,7 +28,7 @@ st.markdown(
 st.title("⚡ ESP Production & Downhole Monitoring Dashboard")
 
 # ==========================================
-# 2. SIDEBAR UPLOAD & INPUT PARAMETER KEDALAMAN
+# 2. SIDEBAR UPLOAD FILE
 # ==========================================
 st.sidebar.header("📁 Unggah Laporan Lapangan")
 uploaded_file = st.sidebar.file_uploader(
@@ -44,23 +43,31 @@ uploaded_dh_file = st.sidebar.file_uploader(
     key="dh_uploader",
 )
 
-st.sidebar.markdown("---")
-st.sidebar.header("⚙️ Input Parameter Kedalaman Sumur (FT)")
-casing_depth_input = st.sidebar.number_input(
-    "Casing / Total Depth (ft)", value=6000, step=100
-)
-pump_depth_input = st.sidebar.number_input(
-    "Pump Setting Depth / PSD (ft)", value=4500, step=50
-)
-perf_top_input = st.sidebar.number_input(
-    "Top Perforation Depth (ft)", value=5000, step=50
-)
-perf_bot_input = st.sidebar.number_input(
-    "Bottom Perforation Depth (ft)", value=5200, step=50
-)
+# Inisialisasi Session State untuk Menyimpan Parameter Kedalaman per Sumur
+if "well_depth_params" not in st.session_state:
+  st.session_state["well_depth_params"] = {}
+
+# Default parameter kedalaman dasar jika belum didefinisikan
+DEFAULT_DEPTH_CONFIGS = {
+    "GE-4": {
+        "casing": 6000.0,
+        "psd": 4500.0,
+        "perf_top": 5000.0,
+        "perf_bot": 5200.0,
+    },
+    "GE-6": {
+        "casing": 7200.0,
+        "psd": 5800.0,
+        "perf_top": 6100.0,
+        "perf_bot": 6350.0,
+    },
+}
 
 all_wells_data = {}
 
+# ==========================================
+# 3. PARSING DATA EXCEL UNTUK SETIAP SUMUR
+# ==========================================
 if uploaded_file is not None:
   try:
     excel_file = pd.ExcelFile(uploaded_file)
@@ -228,22 +235,31 @@ if uploaded_file is not None:
               well_name_derived = row_cells[-1].replace(":", "").strip()
 
         df_clean["Well_Name"] = well_name_derived
-
         all_wells_data[well_name_derived] = df_clean.sort_values("Date")
+
+        # Inisialisasi parameter kedalaman jika sumur baru terdeteksi
+        if well_name_derived not in st.session_state["well_depth_params"]:
+          if well_name_derived in DEFAULT_DEPTH_CONFIGS:
+            st.session_state["well_depth_params"][well_name_derived] = (
+                DEFAULT_DEPTH_CONFIGS[well_name_derived].copy()
+            )
+          else:
+            st.session_state["well_depth_params"][well_name_derived] = {
+                "casing": 6500.0,
+                "psd": 4800.0,
+                "perf_top": 5300.0,
+                "perf_bot": 5500.0,
+            }
 
       if all_wells_data:
         st.sidebar.success(
             f"Berhasil memuat {len(all_wells_data)} Sumur Monitoring!"
         )
-      else:
-        st.sidebar.error("Gagal mengekstrak data dari sheet monitoring.")
 
   except Exception as e:
     st.sidebar.error(f"Eror pembacaan file: {e}")
 
-# ==========================================
-# AMBIL & METAKAN DATA DOWNHOLE TERPISAH (JIKA DIUNGGAH)
-# ==========================================
+# Integration Data Sensor Downhole Terpisah
 if uploaded_dh_file is not None and all_wells_data:
   try:
     if uploaded_dh_file.name.endswith(".csv"):
@@ -309,25 +325,22 @@ if uploaded_dh_file is not None and all_wells_data:
 
         all_wells_data[well_k] = df_target
 
-      st.sidebar.success(
-          "✅ Data Sensor Downhole terpisah berhasil diintegrasikan!"
-      )
+      st.sidebar.success("✅ Data Sensor Downhole terpisah berhasil terhubung!")
 
   except Exception as ex:
     st.sidebar.warning(f"Gagal membaca data sensor terpisah: {ex}")
 
 
 # ==========================================
-# FUNGSI MEMBUAT SKEMATIK DOWNHOLE ESP (RAMPUNG & COMPACT)
+# 4. FUNGSI MEMBUAT SKEMATIK ESP DYNAMIC
 # ==========================================
 def create_esp_schematic_dynamic(
     temp_val, vib_val, pi_val, pd_val, casing_d, psd_d, perf_top, perf_bot
 ):
   fig = go.Figure()
-
   max_d = max(casing_d, perf_bot + 200)
 
-  # Casing Ramping (-0.8 s/d 0.8)
+  # Casing Outer
   fig.add_shape(
       type="rect",
       x0=-0.8,
@@ -409,12 +422,8 @@ def create_esp_schematic_dynamic(
       line=dict(color="#2D3748"),
   )
 
-  # ESP String Components (Compact Width)
-  pump_h = 300
-  intake_h = 150
-  prot_h = 150
-  motor_h = 400
-  gauge_h = 100
+  # ESP Rangkaian
+  pump_h, intake_h, prot_h, motor_h, gauge_h = 300, 150, 150, 400, 100
 
   p_top = psd_d
   p_bot = p_top + pump_h
@@ -502,7 +511,6 @@ def create_esp_schematic_dynamic(
       line=dict(color="#44337A", width=1.5),
   )
 
-  # Cable
   fig.add_trace(
       go.Scatter(
           x=[0.35, 0.35, 0.3],
@@ -514,7 +522,6 @@ def create_esp_schematic_dynamic(
       )
   )
 
-  # Simple Direct Annotations
   fig.add_annotation(
       x=-0.3,
       y=p_top,
@@ -548,9 +555,7 @@ def create_esp_schematic_dynamic(
           zeroline=False,
           showticklabels=False,
       ),
-      yaxis=dict(
-          range=[max_d + 100, -100], showgrid=True, title="Depth (ft)"
-      ),
+      yaxis=dict(range=[max_d + 100, -100], showgrid=True, title="Depth (ft)"),
       height=380,
       margin=dict(l=0, r=0, t=30, b=0),
       showlegend=False,
@@ -562,12 +567,56 @@ def create_esp_schematic_dynamic(
 
 
 # ==========================================
-# 3. TAMPILAN UTAMA DASHBOARD
+# 5. TAMPILAN DASHBOARD & LOGIKA PILIHAN SUMUR DYNAMIC
 # ==========================================
 if all_wells_data:
   selected_well = st.sidebar.selectbox(
       "Pilih Sumur ESP:", list(all_wells_data.keys())
   )
+
+  # Ambil Konfigurasi Kedalaman Spesifik untuk Sumur Terpilih
+  current_depths = st.session_state["well_depth_params"].get(
+      selected_well,
+      {"casing": 6000.0, "psd": 4500.0, "perf_top": 5000.0, "perf_bot": 5200.0},
+  )
+
+  st.sidebar.markdown("---")
+  st.sidebar.header(f"⚙️ Input Kedalaman Sumur ({selected_well})")
+
+  # Widget input yang nilainya terikat dengan sumur yang sedang dipilih melalui key dinamis
+  casing_depth_input = st.sidebar.number_input(
+      "Casing / Total Depth (ft)",
+      value=float(current_depths["casing"]),
+      step=100.0,
+      key=f"casing_{selected_well}",
+  )
+  pump_depth_input = st.sidebar.number_input(
+      "Pump Setting Depth / PSD (ft)",
+      value=float(current_depths["psd"]),
+      step=50.0,
+      key=f"psd_{selected_well}",
+  )
+  perf_top_input = st.sidebar.number_input(
+      "Top Perforation Depth (ft)",
+      value=float(current_depths["perf_top"]),
+      step=50.0,
+      key=f"perftop_{selected_well}",
+  )
+  perf_bot_input = st.sidebar.number_input(
+      "Bottom Perforation Depth (ft)",
+      value=float(current_depths["perf_bot"]),
+      step=50.0,
+      key=f"perfbot_{selected_well}",
+  )
+
+  # Simpan perubahan parameter kedalaman yang disesuaikan pengguna
+  st.session_state["well_depth_params"][selected_well] = {
+      "casing": casing_depth_input,
+      "psd": pump_depth_input,
+      "perf_top": perf_top_input,
+      "perf_bot": perf_bot_input,
+  }
+
   df_well = all_wells_data[selected_well]
   latest_data = df_well.iloc[-1]
 
@@ -576,7 +625,6 @@ if all_wells_data:
       f" ({latest_data['Date'].strftime('%d-%b-%Y')})"
   )
 
-  # Layout Atas: Skematik Sangat Ramping [0.7] di Kiri, Data Produksi Luas [2.3] di Kanan
   c_left_schematic, c_right_metrics = st.columns([0.7, 2.3])
 
   temp_val = latest_data["Motor_Temp_C"]
@@ -615,9 +663,7 @@ if all_wells_data:
 
     st.write("---")
 
-    issues = []
-    warnings = []
-
+    issues, warnings = [], []
     if temp_val > 115:
       issues.append(
           f"🔥 **Overheating**: Temperatur motor tinggi ({temp_val:.1f} °C)."
@@ -656,7 +702,6 @@ if all_wells_data:
 
   st.markdown("---")
 
-  # Layout Bawah: Grafik Tren Produksi & Downhole
   col_graph, col_anim = st.columns(2)
 
   with col_graph:
@@ -665,10 +710,10 @@ if all_wells_data:
         "Pilih Parameter Produksi:",
         options=["Oil Rate (BOPD)", "Water Rate (BWPD)", "Gas Rate (MCFD)"],
         default=["Oil Rate (BOPD)", "Water Rate (BWPD)", "Gas Rate (MCFD)"],
+        key=f"prod_select_{selected_well}",
     )
 
     fig_prod = go.Figure()
-
     if "Oil Rate (BOPD)" in selected_prod:
       fig_prod.add_trace(
           go.Scatter(
@@ -716,7 +761,6 @@ if all_wells_data:
         ),
         margin=dict(l=40, r=40, t=60, b=40),
     )
-
     st.plotly_chart(fig_prod, use_container_width=True)
 
   with col_anim:
@@ -735,10 +779,10 @@ if all_wells_data:
             "Motor Temp (°C)",
             "Vibration (G)",
         ],
+        key=f"dh_select_{selected_well}",
     )
 
     fig_dh = go.Figure()
-
     if "Pump Intake (PI)" in selected_dh:
       fig_dh.add_trace(
           go.Scatter(
@@ -797,5 +841,4 @@ if all_wells_data:
         ),
         margin=dict(l=40, r=40, t=60, b=40),
     )
-
     st.plotly_chart(fig_dh, use_container_width=True)
