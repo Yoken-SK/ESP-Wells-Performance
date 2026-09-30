@@ -5,9 +5,26 @@ import plotly.graph_objects as go
 import streamlit as st
 
 # ==========================================
-# 1. KONFIGURASI HALAMAN DASHBOARD
+# 1. KONFIGURASI HALAMAN DASHBOARD & CUSTOM CSS
 # ==========================================
 st.set_page_config(page_title="ESP Well Dashboard", layout="wide")
+
+# Custom CSS untuk mengecilkan ukuran angka metric agar lebih proporsional
+st.markdown(
+    """
+    <style>
+    [data-testid="stMetricValue"] {
+        font-size: 1.6rem !important;
+        font-weight: 600;
+    }
+    [data-testid="stMetricLabel"] {
+        font-size: 0.85rem !important;
+        color: #4A5568;
+    }
+    </style>
+""",
+    unsafe_allow_html=True,
+)
 
 st.title("⚡ ESP Production & Downhole Monitoring Dashboard")
 st.markdown(
@@ -305,7 +322,7 @@ if uploaded_dh_file is not None and all_wells_data:
 
 
 # ==========================================
-# FUNGSI MEMBUAT SKEMATIK DOWNHOLE ESP DINAMIS BERDASARKAN KEDALAMAN
+# FUNGSI MEMBUAT SKEMATIK DOWNHOLE ESP
 # ==========================================
 def create_esp_schematic_dynamic(
     temp_val, vib_val, pi_val, pd_val, casing_d, psd_d, perf_top, perf_bot
@@ -314,7 +331,7 @@ def create_esp_schematic_dynamic(
 
   max_d = max(casing_d, perf_bot + 200)
 
-  # 1. Casing (Dinding Luar Sumur)
+  # Casing
   fig.add_shape(
       type="rect",
       x0=-1.5,
@@ -334,7 +351,7 @@ def create_esp_schematic_dynamic(
       line=dict(color="#2D3748"),
   )
 
-  # Fluida Dalam Casing (Annulus)
+  # Fluida Annulus
   fig.add_shape(
       type="rect",
       x0=-1.3,
@@ -345,7 +362,7 @@ def create_esp_schematic_dynamic(
       line=dict(width=0),
   )
 
-  # 2. Zona Perforasi (Interval Perforation)
+  # Zona Perforasi
   fig.add_shape(
       type="rect",
       x0=-1.6,
@@ -365,20 +382,35 @@ def create_esp_schematic_dynamic(
       line=dict(color="#9B2C2C"),
   )
 
-  # Panah Aliran Fluida dari Perforasi
   for y_p in np.linspace(perf_top + 30, perf_bot - 30, 3):
     fig.add_annotation(
-        x=-1.3, y=y_p, ax=-1.9, ay=y_p, showarrow=True, arrowhead=2, arrowcolor="#E53E3E"
+        x=-1.3,
+        y=y_p,
+        ax=-1.9,
+        ay=y_p,
+        showarrow=True,
+        arrowhead=2,
+        arrowcolor="#E53E3E",
     )
     fig.add_annotation(
-        x=1.3, y=y_p, ax=1.9, ay=y_p, showarrow=True, arrowhead=2, arrowcolor="#E53E3E"
+        x=1.3,
+        y=y_p,
+        ax=1.9,
+        ay=y_p,
+        showarrow=True,
+        arrowhead=2,
+        arrowcolor="#E53E3E",
     )
 
   fig.add_annotation(
-      x=2.2, y=(perf_top + perf_bot) / 2, text=f"Perforation Zone\n({perf_top:.0f} - {perf_bot:.0f} ft)", showarrow=False, font=dict(color="#C53030", size=10)
+      x=2.2,
+      y=(perf_top + perf_bot) / 2,
+      text=f"Perf Zone\n({perf_top:.0f}-{perf_bot:.0f}ft)",
+      showarrow=False,
+      font=dict(color="#C53030", size=9),
   )
 
-  # 3. Production Tubing
+  # Tubing
   fig.add_shape(
       type="rect",
       x0=-0.3,
@@ -389,14 +421,13 @@ def create_esp_schematic_dynamic(
       line=dict(color="#2D3748"),
   )
 
-  # 4. ESP RTA / String Assembly (Diatur pada kedalaman PSD)
+  # Pump String Components
   pump_h = 300
   intake_h = 150
   prot_h = 150
   motor_h = 400
   gauge_h = 100
 
-  # Pump
   p_top = psd_d
   p_bot = p_top + pump_h
   fig.add_shape(
@@ -409,10 +440,13 @@ def create_esp_schematic_dynamic(
       line=dict(color="#1A365D", width=2),
   )
   fig.add_annotation(
-      x=0, y=(p_top + p_bot) / 2, text="PUMP", showarrow=False, font=dict(color="white", size=10, family="Arial Black")
+      x=0,
+      y=(p_top + p_bot) / 2,
+      text="PUMP",
+      showarrow=False,
+      font=dict(color="white", size=9, family="Arial Black"),
   )
 
-  # Intake
   i_top = p_bot
   i_bot = i_top + intake_h
   fig.add_shape(
@@ -425,10 +459,13 @@ def create_esp_schematic_dynamic(
       line=dict(color="#7B341E", width=2),
   )
   fig.add_annotation(
-      x=0, y=(i_top + i_bot) / 2, text="INTAKE", showarrow=False, font=dict(color="white", size=9)
+      x=0,
+      y=(i_top + i_bot) / 2,
+      text="INTAKE",
+      showarrow=False,
+      font=dict(color="white", size=8),
   )
 
-  # Protector
   pr_top = i_bot
   pr_bot = pr_top + prot_h
   fig.add_shape(
@@ -441,10 +478,13 @@ def create_esp_schematic_dynamic(
       line=dict(color="#744210", width=2),
   )
 
-  # Motor
   m_top = pr_bot
   m_bot = m_top + motor_h
-  motor_color = "#E53E3E" if temp_val > 115 else ("#DD6B20" if temp_val > 105 else "#38A169")
+  motor_color = (
+      "#E53E3E"
+      if temp_val > 115
+      else ("#DD6B20" if temp_val > 105 else "#38A169")
+  )
   fig.add_shape(
       type="rect",
       x0=-0.45,
@@ -455,10 +495,13 @@ def create_esp_schematic_dynamic(
       line=dict(color="#1A202C", width=2),
   )
   fig.add_annotation(
-      x=0, y=(m_top + m_bot) / 2, text="MOTOR", showarrow=False, font=dict(color="white", size=10, family="Arial Black")
+      x=0,
+      y=(m_top + m_bot) / 2,
+      text="MOTOR",
+      showarrow=False,
+      font=dict(color="white", size=9, family="Arial Black"),
   )
 
-  # Sensor Gauge
   g_top = m_bot
   g_bot = g_top + gauge_h
   fig.add_shape(
@@ -471,35 +514,69 @@ def create_esp_schematic_dynamic(
       line=dict(color="#44337A", width=2),
   )
 
-  # 5. Kabel Daya (Power Cable)
+  # Cable
   fig.add_trace(
       go.Scatter(
           x=[0.6, 0.6, 0.55],
           y=[0, m_top, m_top],
           mode="lines",
           line=dict(color="#E53E3E", width=3),
-          name="Power Cable",
+          showlegend=False,
           hoverinfo="none",
       )
   )
 
-  # 6. Callouts Data Parameter
+  # Callouts
   fig.add_annotation(
-      x=-0.5, y=p_top, ax=-2.2, ay=p_top, text=f"PSD: {psd_d:.0f} ft\nPD: {pd_val:.1f} PSI", showarrow=True, arrowhead=2, arrowcolor="#2B6CB0", font=dict(size=11, color="#2B6CB0")
+      x=-0.5,
+      y=p_top,
+      ax=-2.2,
+      ay=p_top,
+      text=f"PSD: {psd_d:.0f}ft",
+      showarrow=True,
+      arrowhead=2,
+      arrowcolor="#2B6CB0",
+      font=dict(size=10, color="#2B6CB0"),
   )
   fig.add_annotation(
-      x=-0.45, y=i_top, ax=-2.2, ay=i_top, text=f"PI: {pi_val:.1f} PSI", showarrow=True, arrowhead=2, arrowcolor="#C05621", font=dict(size=11, color="#C05621")
+      x=-0.45,
+      y=i_top,
+      ax=-2.2,
+      ay=i_top,
+      text=f"PI: {pi_val:.0f}PSI",
+      showarrow=True,
+      arrowhead=2,
+      arrowcolor="#C05621",
+      font=dict(size=10, color="#C05621"),
   )
   fig.add_annotation(
-      x=-0.45, y=(m_top + m_bot) / 2, ax=-2.2, ay=(m_top + m_bot) / 2, text=f"Temp: {temp_val:.1f} °C\nVib: {vib_val:.2f} G", showarrow=True, arrowhead=2, arrowcolor=motor_color, font=dict(size=11, color=motor_color)
+      x=-0.45,
+      y=(m_top + m_bot) / 2,
+      ax=-2.2,
+      ay=(m_top + m_bot) / 2,
+      text=f"{temp_val:.1f}°C\n{vib_val:.2f}G",
+      showarrow=True,
+      arrowhead=2,
+      arrowcolor=motor_color,
+      font=dict(size=10, color=motor_color),
   )
 
   fig.update_layout(
-      title=dict(text="🎨 Downhole ESP Well Schematic", x=0.5, xanchor="center"),
-      xaxis=dict(range=[-3.0, 3.0], showgrid=False, zeroline=False, showticklabels=False),
-      yaxis=dict(range=[max_d + 100, -100], showgrid=True, title="Depth (ft)"),  # Sumbu Y dibalik (0 di atas)
-      height=580,
-      margin=dict(l=10, r=10, t=40, b=10),
+      title=dict(
+          text="🎨 ESP Well Schematic",
+          x=0.5,
+          xanchor="center",
+          font=dict(size=14),
+      ),
+      xaxis=dict(
+          range=[-3.0, 3.0],
+          showgrid=False,
+          zeroline=False,
+          showticklabels=False,
+      ),
+      yaxis=dict(range=[max_d + 100, -100], showgrid=True, title="Depth (ft)"),
+      height=400,
+      margin=dict(l=5, r=5, t=35, b=5),
       showlegend=False,
       paper_bgcolor="rgba(0,0,0,0)",
       plot_bgcolor="rgba(0,0,0,0)",
@@ -523,73 +600,17 @@ if all_wells_data:
       f" ({latest_data['Date'].strftime('%d-%b-%Y')})"
   )
 
-  col1, col2, col3, col4 = st.columns(4)
-  col1.metric("Oil Rate", f"{latest_data['Oil_Rate_BOPD']:.1f} BOPD")
-  col2.metric("Water Rate", f"{latest_data['Water_Rate_BWPD']:.1f} BWPD")
-  col3.metric("Water Cut", f"{latest_data['Water_Cut_Percent']:.1f} %")
-  col4.metric("Gas Rate", f"{latest_data['Gas_Rate_MSCFD']:.1f} MCFD")
+  # Layout Atas: Skematik di Sebelah Kiri, Metric Produksi Proporsional di Sebelah Kanan
+  c_left_schematic, c_right_metrics = st.columns([1, 2.2])
 
-  col5, col6, col7, col8 = st.columns(4)
-  col5.metric("Pump Intake (PI)", f"{latest_data['PI_PSI']:.1f} PSI")
-  col6.metric("Pump Discharge (PD)", f"{latest_data['PD_PSI']:.1f} PSI")
-  col7.metric("VSD Frequency", f"{latest_data['Frequency_Hz']:.1f} Hz")
-  col8.metric("Total Data Points", f"{len(df_well)} Hari")
-
-  st.markdown("---")
-
-  # ==========================================
-  # DIAGNOSTIK & SKEMATIK DOWNHOLE
-  # ==========================================
   temp_val = latest_data["Motor_Temp_C"]
   vib_val = latest_data["Vibration_G"]
   pi_val = latest_data["PI_PSI"]
   pd_val = latest_data["PD_PSI"]
   wc_val = latest_data["Water_Cut_Percent"]
 
-  issues = []
-  warnings = []
-
-  if temp_val > 115:
-    issues.append(
-        f"🔥 **Overheating**: Temperatur motor tinggi ({temp_val:.1f} °C)."
-    )
-  elif temp_val > 105:
-    warnings.append(
-        f"⚠️ **Warning Temp**: Temperatur motor mendekati limit"
-        f" ({temp_val:.1f} °C)."
-    )
-
-  if vib_val > 2.5:
-    issues.append(
-        f"🚨 **High Vibration**: Vibrasi berlebih ({vib_val:.2f} G). Potensi"
-        " unbalance/wear."
-    )
-  elif vib_val > 1.8:
-    warnings.append(
-        f"⚠️ **Warning Vibrasi**: Vibrasi di atas batas aman ({vib_val:.2f} G)."
-    )
-
-  if pi_val < 200 and pi_val > 0:
-    warnings.append(
-        f"⚠️ **Low Intake Pressure**: PI rendah ({pi_val:.1f} PSI), risiko"
-        " gas interference/pump off."
-    )
-
-  if pd_val > 0 and (pd_val - pi_val) < 200:
-    warnings.append(
-        f"⚠️ **Low Differential Pressure**: Delta P ({pd_val - pi_val:.1f} PSI)"
-        " rendah."
-    )
-
-  if wc_val > 90:
-    warnings.append(
-        f"💧 **High Water Cut**: Konsentrasi air sangat tinggi ({wc_val:.1f}%)."
-    )
-
-  c_schematic, c_diag = st.columns([1.1, 0.9])
-
-  with c_schematic:
-    # Render Skematik ESP Dinamis berdasarkan input kedalaman
+  with c_left_schematic:
+    # Skematik ESP di sebelah kiri
     fig_sch = create_esp_schematic_dynamic(
         temp_val,
         vib_val,
@@ -602,37 +623,70 @@ if all_wells_data:
     )
     st.plotly_chart(fig_sch, use_container_width=True)
 
-  with c_diag:
-    st.subheader("🔍 Analisis Performa & Diagnostik ESP")
+  with c_right_metrics:
+    st.markdown("### 📈 Ringkasan Parameter & Produksi")
+
+    # Grid Metric Produksi Ringkas & Proporsional
+    m_col1, m_col2, m_col3, m_col4 = st.columns(4)
+    m_col1.metric("Oil Rate", f"{latest_data['Oil_Rate_BOPD']:.1f}", "BOPD")
+    m_col2.metric("Water Rate", f"{latest_data['Water_Rate_BWPD']:.1f}", "BWPD")
+    m_col3.metric("Water Cut", f"{latest_data['Water_Cut_Percent']:.1f}", "%")
+    m_col4.metric("Gas Rate", f"{latest_data['Gas_Rate_MSCFD']:.1f}", "MCFD")
+
+    m_col5, m_col6, m_col7, m_col8 = st.columns(4)
+    m_col5.metric("Pump Intake", f"{latest_data['PI_PSI']:.1f}", "PSI")
+    m_col6.metric("Pump Discharge", f"{latest_data['PD_PSI']:.1f}", "PSI")
+    m_col7.metric("VSD Frequency", f"{latest_data['Frequency_Hz']:.1f}", "Hz")
+    m_col8.metric("Motor Temp", f"{temp_val:.1f}", "°C")
+
     st.write("---")
 
-    col_m1, col_m2 = st.columns(2)
-    col_m1.metric("Motor Temp", f"{temp_val:.1f} °C")
-    col_m2.metric("Vibration", f"{vib_val:.2f} G")
+    # Diagnostik Ringkas
+    issues = []
+    warnings = []
 
-    st.write("")
+    if temp_val > 115:
+      issues.append(
+          f"🔥 **Overheating**: Temperatur motor tinggi ({temp_val:.1f} °C)."
+      )
+    elif temp_val > 105:
+      warnings.append(
+          f"⚠️ **Warning Temp**: Temperatur mendekati limit ({temp_val:.1f} °C)."
+      )
+
+    if vib_val > 2.5:
+      issues.append(
+          f"🚨 **High Vibration**: Vibrasi berlebih ({vib_val:.2f} G)."
+      )
+    elif vib_val > 1.8:
+      warnings.append(
+          f"⚠️ **Warning Vibrasi**: Vibrasi tinggi ({vib_val:.2f} G)."
+      )
+
+    if pi_val < 200 and pi_val > 0:
+      warnings.append(
+          f"⚠️ **Low Intake Pressure**: PI rendah ({pi_val:.1f} PSI)."
+      )
+
+    if wc_val > 90:
+      warnings.append(
+          f"💧 **High Water Cut**: Air sangat tinggi ({wc_val:.1f}%)."
+      )
 
     if not issues and not warnings:
-      st.success(
-          "✅ **Performa Bagus / Normal**: Tidak terdeteksi anomali pada"
-          " parameter downhole maupun produksi."
-      )
+      st.success("✅ **Performa Normal**: Tidak terdeteksi anomali pada sumur.")
     else:
-      if issues:
-        for iss in issues:
-          st.error(iss)
-      if warnings:
-        for warn in warnings:
-          st.warning(warn)
+      for iss in issues:
+        st.error(iss)
+      for warn in warnings:
+        st.warning(warn)
 
   st.markdown("---")
 
+  # Layout Bawah: Grafik Tren Produksi & Downhole
   col_graph, col_anim = st.columns(2)
 
   with col_graph:
-    # ==========================================
-    # 4. GRAFIK TREN PRODUKSI (KOLOM KIRI)
-    # ==========================================
     st.subheader("📈 Grafik Tren Produksi Sumur")
     selected_prod = st.multiselect(
         "Pilih Parameter Produksi:",
@@ -693,9 +747,6 @@ if all_wells_data:
     st.plotly_chart(fig_prod, use_container_width=True)
 
   with col_anim:
-    # ==========================================
-    # 5. GRAFIK DOWNHOLE MONITORING (KOLOM KANAN)
-    # ==========================================
     st.subheader("📉 Grafik Downhole Monitoring")
     selected_dh = st.multiselect(
         "Pilih Parameter Downhole:",
