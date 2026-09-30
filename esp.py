@@ -5,20 +5,50 @@ import plotly.graph_objects as go
 import streamlit as st
 
 # ==========================================
-# 1. KONFIGURASI HALAMAN DASHBOARD & CUSTOM CSS
+# 1. KONFIGURASI HALAMAN DASHBOARD & RESPONSIVE CSS
 # ==========================================
-st.set_page_config(page_title="ESP Well Dashboard", layout="wide")
+st.set_page_config(
+    page_title="ESP Well Dashboard",
+    layout="wide",
+    initial_sidebar_state="collapsed",  # Sidebar otomatis terlipat di HP agar layar utama lega
+)
 
+# Custom CSS untuk Responsivitas Mobile & Tablet
 st.markdown(
     """
     <style>
+    /* Meta tag simulation & padding adjustment */
+    .block-container {
+        padding-top: 1.5rem !important;
+        padding-bottom: 1.5rem !important;
+        padding-left: 1rem !important;
+        padding-right: 1rem !important;
+    }
+    
+    /* Responsive Font Sizes for Metrics */
     [data-testid="stMetricValue"] {
-        font-size: 1.5rem !important;
+        font-size: clamp(1.1rem, 2.5vw, 1.5rem) !important;
         font-weight: 700;
     }
     [data-testid="stMetricLabel"] {
-        font-size: 0.85rem !important;
+        font-size: clamp(0.75rem, 1.5vw, 0.85rem) !important;
         color: #4A5568;
+    }
+
+    /* Responsive Plotly Chart Container */
+    .stPlotlyChart {
+        width: 100% !important;
+    }
+
+    /* Mobile Friendly Typography */
+    h1 {
+        font-size: clamp(1.4rem, 4vw, 2.2rem) !important;
+    }
+    h2 {
+        font-size: clamp(1.2rem, 3vw, 1.8rem) !important;
+    }
+    h3 {
+        font-size: clamp(1.0rem, 2.5vw, 1.4rem) !important;
     }
     </style>
 """,
@@ -28,7 +58,7 @@ st.markdown(
 st.title("⚡ ESP Production & Downhole Monitoring Dashboard")
 
 # ==========================================
-# 2. SIDEBAR UPLOAD FILE
+# 2. SIDEBAR UPLOAD FILE & INPUT KEDALAMAN
 # ==========================================
 st.sidebar.header("📁 Unggah Laporan Lapangan")
 uploaded_file = st.sidebar.file_uploader(
@@ -43,11 +73,9 @@ uploaded_dh_file = st.sidebar.file_uploader(
     key="dh_uploader",
 )
 
-# Inisialisasi Session State untuk Menyimpan Parameter Kedalaman per Sumur
 if "well_depth_params" not in st.session_state:
   st.session_state["well_depth_params"] = {}
 
-# Default parameter kedalaman dasar jika belum didefinisikan
 DEFAULT_DEPTH_CONFIGS = {
     "GE-4": {
         "casing": 6000.0,
@@ -164,7 +192,6 @@ if uploaded_file is not None:
             ["pdischarge", "pdp", "discharge", "pdischargepsi", "p.discharge"]
         )
 
-        # Default np.nan agar tidak otomatis muncul angka dummy jika belum ada data sensor
         df_clean["Motor_Temp_C"] = find_and_parse_flexible(
             ["motortemp", "mtemp", "temp", "motortempc", "tmotor"],
             default_val=np.nan,
@@ -174,7 +201,6 @@ if uploaded_file is not None:
             default_val=np.nan,
         )
 
-        # Perbaikan syntax error pada bagian Frequency
         freq_series = find_and_parse_flexible(
             ["freqhz", "hz", "freq", "vsd"], default_val=40
         )
@@ -327,7 +353,7 @@ if uploaded_dh_file is not None and all_wells_data:
 
 
 # ==========================================
-# 4. FUNGSI MEMBUAT SKEMATIK ESP DYNAMIC
+# 4. FUNGSI MEMBUAT SKEMATIK ESP RESPONSIVE
 # ==========================================
 def create_esp_schematic_dynamic(
     temp_val, vib_val, pi_val, pd_val, casing_d, psd_d, perf_top, perf_bot
@@ -549,24 +575,25 @@ def create_esp_schematic_dynamic(
           text="🎨 ESP Schematic", x=0.5, xanchor="center", font=dict(size=12)
       ),
       xaxis=dict(
-          range=[-1.5, 1.5],
+          range=[-1.4, 1.4],
           showgrid=False,
           zeroline=False,
           showticklabels=False,
       ),
       yaxis=dict(range=[max_d + 100, -100], showgrid=True, title="Depth (ft)"),
-      height=380,
-      margin=dict(l=0, r=0, t=30, b=0),
+      height=350,
+      margin=dict(l=10, r=10, t=30, b=10),
       showlegend=False,
       paper_bgcolor="rgba(0,0,0,0)",
       plot_bgcolor="rgba(0,0,0,0)",
+      autosize=True,
   )
 
   return fig
 
 
 # ==========================================
-# 5. TAMPILAN DASHBOARD & LOGIKA PILIHAN SUMUR DYNAMIC
+# 5. TAMPILAN DASHBOARD & LOGIKA RESPONSIVE LAYOUT
 # ==========================================
 if all_wells_data:
   selected_well = st.sidebar.selectbox(
@@ -617,11 +644,12 @@ if all_wells_data:
   latest_data = df_well.iloc[-1]
 
   st.subheader(
-      f"📊 Status Terakhir Sumur: {selected_well}"
+      f"📊 Status Terakhir: {selected_well}"
       f" ({latest_data['Date'].strftime('%d-%b-%Y')})"
   )
 
-  c_left_schematic, c_right_metrics = st.columns([0.7, 2.3])
+  # Layout Atas: Di HP otomatis menyusun vertikal
+  c_left_schematic, c_right_metrics = st.columns([1, 2])
 
   temp_val = latest_data["Motor_Temp_C"]
   vib_val = latest_data["Vibration_G"]
@@ -643,19 +671,25 @@ if all_wells_data:
     st.plotly_chart(fig_sch, use_container_width=True)
 
   with c_right_metrics:
-    st.markdown("### 📈 Ringkasan Parameter & Produksi")
+    st.markdown("### 📈 Ringkasan Parameter")
 
-    m_col1, m_col2, m_col3, m_col4 = st.columns(4)
+    # Grid Metric 2x2 untuk HP/Tablet agar rapi
+    m_col1, m_col2 = st.columns(2)
     m_col1.metric("Oil Rate", f"{latest_data['Oil_Rate_BOPD']:.1f}", "BOPD")
     m_col2.metric("Water Rate", f"{latest_data['Water_Rate_BWPD']:.1f}", "BWPD")
+
+    m_col3, m_col4 = st.columns(2)
     m_col3.metric("Water Cut", f"{latest_data['Water_Cut_Percent']:.1f}", "%")
     m_col4.metric("Gas Rate", f"{latest_data['Gas_Rate_MSCFD']:.1f}", "MCFD")
 
-    m_col5, m_col6, m_col7, m_col8 = st.columns(4)
+    st.write("---")
+
+    m_col5, m_col6 = st.columns(2)
     m_col5.metric("Pump Intake", f"{latest_data['PI_PSI']:.1f}", "PSI")
     m_col6.metric("Pump Discharge", f"{latest_data['PD_PSI']:.1f}", "PSI")
-    m_col7.metric("VSD Frequency", f"{latest_data['Frequency_Hz']:.1f}", "Hz")
 
+    m_col7, m_col8 = st.columns(2)
+    m_col7.metric("VSD Frequency", f"{latest_data['Frequency_Hz']:.1f}", "Hz")
     temp_disp = f"{temp_val:.1f}" if pd.notnull(temp_val) else "-"
     m_col8.metric("Motor Temp", temp_disp, "°C")
 
@@ -703,10 +737,11 @@ if all_wells_data:
 
   st.markdown("---")
 
-  col_graph, col_anim = st.columns(2)
+  # Layout Grafik Bawah
+  col_graph, col_anim = st.columns([1, 1])
 
   with col_graph:
-    st.subheader("📈 Grafik Tren Produksi Sumur")
+    st.subheader("📈 Tren Produksi")
     selected_prod = st.multiselect(
         "Pilih Parameter Produksi:",
         options=["Oil Rate (BOPD)", "Water Rate (BWPD)", "Gas Rate (MCFD)"],
@@ -721,8 +756,8 @@ if all_wells_data:
               x=df_well["Date"],
               y=df_well["Oil_Rate_BOPD"],
               mode="lines+markers",
-              name="Oil Rate (BOPD)",
-              line=dict(color="green", width=2.5),
+              name="Oil Rate",
+              line=dict(color="green", width=2),
           )
       )
     if "Water Rate (BWPD)" in selected_prod:
@@ -731,7 +766,7 @@ if all_wells_data:
               x=df_well["Date"],
               y=df_well["Water_Rate_BWPD"],
               mode="lines+markers",
-              name="Water Rate (BWPD)",
+              name="Water Rate",
               line=dict(color="blue", width=2),
           )
       )
@@ -741,31 +776,29 @@ if all_wells_data:
               x=df_well["Date"],
               y=df_well["Gas_Rate_MSCFD"],
               mode="lines+markers",
-              name="Gas Rate (MCFD)",
+              name="Gas Rate",
               yaxis="y2",
               line=dict(color="red", width=2, dash="dash"),
           )
       )
 
     fig_prod.update_layout(
-        title=f"Tren Produksi - {selected_well}",
+        title=f"Produksi - {selected_well}",
         xaxis=dict(title="Tanggal"),
-        yaxis=dict(title="Liquid / Oil / Water Rate (STB/D)"),
+        yaxis=dict(title="Liquid/Oil/Water (STB/D)"),
         yaxis2=dict(
-            title="Gas Rate (MSCFD)",
-            overlaying="y",
-            side="right",
-            showgrid=False,
+            title="Gas (MCFD)", overlaying="y", side="right", showgrid=False
         ),
         legend=dict(
-            orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1
+            orientation="h", yanchor="top", y=-0.2, xanchor="center", x=0.5
         ),
-        margin=dict(l=40, r=40, t=60, b=40),
+        margin=dict(l=20, r=20, t=40, b=60),
+        autosize=True,
     )
     st.plotly_chart(fig_prod, use_container_width=True)
 
   with col_anim:
-    st.subheader("📉 Grafik Downhole Monitoring")
+    st.subheader("📉 Downhole Monitoring")
     selected_dh = st.multiselect(
         "Pilih Parameter Downhole:",
         options=[
@@ -791,7 +824,7 @@ if all_wells_data:
               y=df_well["PI_PSI"],
               mode="lines+markers",
               name="PI (PSI)",
-              line=dict(color="darkorange", width=2.5),
+              line=dict(color="darkorange", width=2),
           )
       )
     if "Pump Discharge (PD)" in selected_dh:
@@ -810,7 +843,7 @@ if all_wells_data:
               x=df_well["Date"],
               y=df_well["Motor_Temp_C"],
               mode="lines+markers",
-              name="Motor Temp (°C)",
+              name="Temp (°C)",
               yaxis="y2",
               line=dict(color="crimson", width=2, dash="dash"),
           )
@@ -821,25 +854,23 @@ if all_wells_data:
               x=df_well["Date"],
               y=df_well["Vibration_G"],
               mode="lines+markers",
-              name="Vibration (G)",
+              name="Vib (G)",
               yaxis="y2",
               line=dict(color="teal", width=2, dash="dot"),
           )
       )
 
     fig_dh.update_layout(
-        title=f"Tekanan & Downhole Health - {selected_well}",
+        title=f"Downhole Health - {selected_well}",
         xaxis=dict(title="Tanggal"),
         yaxis=dict(title="Tekanan (PSI)"),
         yaxis2=dict(
-            title="Temp (°C) / Vibration (G)",
-            overlaying="y",
-            side="right",
-            showgrid=False,
+            title="Temp/Vib", overlaying="y", side="right", showgrid=False
         ),
         legend=dict(
-            orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1
+            orientation="h", yanchor="top", y=-0.2, xanchor="center", x=0.5
         ),
-        margin=dict(l=40, r=40, t=60, b=40),
+        margin=dict(l=20, r=20, t=40, b=60),
+        autosize=True,
     )
     st.plotly_chart(fig_dh, use_container_width=True)
