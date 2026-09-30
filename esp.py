@@ -126,6 +126,10 @@ if uploaded_file is not None:
             ["motortemp", "mtemp", "temp", "motortempc", "tmotor"],
             default_val=95.0,
         )
+        df_clean["Vibration_G"] = find_and_parse_flexible(
+            ["vibration", "vib", "vibrationg", "vibrasig", "vibg"],
+            default_val=1.2,
+        )
         df_clean["Frequency_Hz"] = (
             find_and_parse_flexible(
                 ["freqhz", "hz", "freq", "vsd"], default_val=40
@@ -146,6 +150,9 @@ if uploaded_file is not None:
         df_clean["PD_PSI"] = df_clean["PD_PSI"].ffill().bfill().fillna(0)
         df_clean["Motor_Temp_C"] = (
             df_clean["Motor_Temp_C"].ffill().bfill().fillna(95.0)
+        )
+        df_clean["Vibration_G"] = (
+            df_clean["Vibration_G"].ffill().bfill().fillna(1.2)
         )
         df_clean["Oil_Rate_BOPD"] = df_clean["Oil_Rate_BOPD"].fillna(0)
         df_clean["Water_Rate_BWPD"] = df_clean["Water_Rate_BWPD"].fillna(0)
@@ -189,7 +196,6 @@ if uploaded_file is not None:
               well_name_derived = row_cells[-1].replace(":", "").strip()
 
         df_clean["Well_Name"] = well_name_derived
-        df_clean["Vibration_G"] = 1.2
 
         all_wells_data[well_name_derived] = df_clean.sort_values("Date")
 
@@ -229,6 +235,80 @@ if all_wells_data:
   col6.metric("Pump Discharge (PD)", f"{latest_data['PD_PSI']:.1f} PSI")
   col7.metric("VSD Frequency", f"{latest_data['Frequency_Hz']:.1f} Hz")
   col8.metric("Total Data Points", f"{len(df_well)} Hari")
+
+  st.markdown("---")
+
+  # ==========================================
+  # FITUR BARU: ANALISIS PERFORMA ESP & DIAGNOSTIK
+  # ==========================================
+  st.subheader("🔍 Analisis Performa & Diagnostik ESP")
+
+  temp_val = latest_data["Motor_Temp_C"]
+  vib_val = latest_data["Vibration_G"]
+  pi_val = latest_data["PI_PSI"]
+  pd_val = latest_data["PD_PSI"]
+  wc_val = latest_data["Water_Cut_Percent"]
+
+  issues = []
+  warnings = []
+
+  # Evaluasi Kriteria Operasional ESP
+  if temp_val > 115:
+    issues.append(
+        f"🔥 **Overheating**: Temperatur motor tinggi ({temp_val:.1f} °C)."
+    )
+  elif temp_val > 105:
+    warnings.append(
+        f"⚠️ **Warning Temp**: Temperatur motor mendekati limit"
+        f" ({temp_val:.1f} °C)."
+    )
+
+  if vib_val > 2.5:
+    issues.append(
+        f"🚨 **High Vibration**: Vibrasi berlebih ({vib_val:.2f} G). Potensi"
+        " unbalance/wear."
+    )
+  elif vib_val > 1.8:
+    warnings.append(
+        f"⚠️ **Warning Vibrasi**: Vibrasi di atas batas aman ({vib_val:.2f} G)."
+    )
+
+  if pi_val < 200 and pi_val > 0:
+    warnings.append(
+        f"⚠️ **Low Intake Pressure**: PI rendah ({pi_val:.1f} PSI), risiko"
+        " gas interference/pump off."
+    )
+
+  if pd_val > 0 and (pd_val - pi_val) < 200:
+    warnings.append(
+        f"⚠️ **Low Differential Pressure**: Delta P ({pd_val - pi_val:.1f} PSI)"
+        " rendah."
+    )
+
+  if wc_val > 90:
+    warnings.append(
+        f"💧 **High Water Cut**: Konsentrasi air sangat tinggi ({wc_val:.1f}%)."
+    )
+
+  c_diag1, c_diag2 = st.columns([1, 2])
+
+  with c_diag1:
+    st.metric("Motor Temp", f"{temp_val:.1f} °C")
+    st.metric("Vibration", f"{vib_val:.2f} G")
+
+  with c_diag2:
+    if not issues and not warnings:
+      st.success(
+          "✅ **Performa Bagus / Normal**: Tidak terdeteksi anomali pada"
+          " parameter downhole maupun produksi."
+      )
+    else:
+      if issues:
+        for iss in issues:
+          st.error(iss)
+      if warnings:
+        for warn in warnings:
+          st.warning(warn)
 
   st.markdown("---")
 
@@ -308,6 +388,7 @@ if all_wells_data:
             "Pump Intake (PI)",
             "Pump Discharge (PD)",
             "Motor Temp (°C)",
+            "Vibration (G)",
         ],
         default=[
             "Pump Intake (PI)",
@@ -349,13 +430,24 @@ if all_wells_data:
               line=dict(color="crimson", width=2, dash="dash"),
           )
       )
+    if "Vibration (G)" in selected_dh:
+      fig_dh.add_trace(
+          go.Scatter(
+              x=df_well["Date"],
+              y=df_well["Vibration_G"],
+              mode="lines+markers",
+              name="Vibration (G)",
+              yaxis="y2",
+              line=dict(color="teal", width=2, dash="dot"),
+          )
+      )
 
     fig_dh.update_layout(
-        title=f"Tekanan & Temperatur - {selected_well}",
+        title=f"Tekanan & Downhole Health - {selected_well}",
         xaxis=dict(title="Tanggal"),
         yaxis=dict(title="Tekanan (PSI)"),
         yaxis2=dict(
-            title="Temperatur (°C)",
+            title="Temp (°C) / Vibration (G)",
             overlaying="y",
             side="right",
             showgrid=False,
