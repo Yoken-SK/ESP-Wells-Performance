@@ -23,7 +23,6 @@ uploaded_file = st.sidebar.file_uploader(
     "1. Upload File Excel Produksi Utama (.xlsx)", type=["xlsx"]
 )
 
-# Fitur Tambahan: Upload Data Downhole Terpisah (CSV/Excel)
 st.sidebar.markdown("---")
 st.sidebar.header("📊 Unggah Data Downhole Khusus (Opsional)")
 uploaded_dh_file = st.sidebar.file_uploader(
@@ -228,10 +227,8 @@ if uploaded_dh_file is not None and all_wells_data:
     else:
       df_dh_upload = pd.read_excel(uploaded_dh_file)
 
-    # Bersihkan nama kolom
     df_dh_upload.columns = df_dh_upload.columns.str.strip().str.lower()
 
-    # Cari kolom tanggal, temp, vibrasi
     date_col = next(
         (
             c
@@ -264,12 +261,13 @@ if uploaded_dh_file is not None and all_wells_data:
 
       for well_k in all_wells_data.keys():
         df_target = all_wells_data[well_k]
-        # Merge berdasarkan tanggal
         if temp_col:
           df_dh_upload[temp_col] = pd.to_numeric(
               df_dh_upload[temp_col], errors="coerce"
           )
-          temp_map = df_dh_upload.dropna(subset=["Date_Parsed", temp_col]).set_index("Date_Parsed")[temp_col]
+          temp_map = df_dh_upload.dropna(
+              subset=["Date_Parsed", temp_col]
+          ).set_index("Date_Parsed")[temp_col]
           df_target["Motor_Temp_C"] = (
               df_target["Date"].map(temp_map).fillna(df_target["Motor_Temp_C"])
           )
@@ -278,17 +276,182 @@ if uploaded_dh_file is not None and all_wells_data:
           df_dh_upload[vib_col] = pd.to_numeric(
               df_dh_upload[vib_col], errors="coerce"
           )
-          vib_map = df_dh_upload.dropna(subset=["Date_Parsed", vib_col]).set_index("Date_Parsed")[vib_col]
+          vib_map = df_dh_upload.dropna(
+              subset=["Date_Parsed", vib_col]
+          ).set_index("Date_Parsed")[vib_col]
           df_target["Vibration_G"] = (
               df_target["Date"].map(vib_map).fillna(df_target["Vibration_G"])
           )
 
         all_wells_data[well_k] = df_target
 
-      st.sidebar.success("✅ Data Sensor Downhole terpisah berhasil diintegrasikan!")
+      st.sidebar.success(
+          "✅ Data Sensor Downhole terpisah berhasil diintegrasikan!"
+      )
 
   except Exception as ex:
     st.sidebar.warning(f"Gagal membaca data sensor terpisah: {ex}")
+
+
+# ==========================================
+# FUNGSI MEMBUAT SKEMATIK DOWNHOLE ESP
+# ==========================================
+def create_esp_schematic(temp_val, vib_val, pi_val, pd_val):
+  fig = go.Figure()
+
+  # 1. Casing (Dinding Luar Sumur)
+  fig.add_shape(
+      type="rect",
+      x0=-1.5,
+      y0=0,
+      x1=-1.3,
+      y1=100,
+      fillcolor="#4A5568",
+      line=dict(color="#2D3748"),
+  )
+  fig.add_shape(
+      type="rect",
+      x0=1.3,
+      y0=0,
+      x1=1.5,
+      y1=100,
+      fillcolor="#4A5568",
+      line=dict(color="#2D3748"),
+  )
+
+  # Fluida Dalam Casing (Annulus)
+  fig.add_shape(
+      type="rect",
+      x0=-1.3,
+      y0=0,
+      x1=1.3,
+      y1=100,
+      fillcolor="rgba(226, 232, 240, 0.3)",
+      line=dict(width=0),
+  )
+
+  # 2. Production Tubing
+  fig.add_shape(
+      type="rect",
+      x0=-0.3,
+      y0=50,
+      x1=0.3,
+      y1=100,
+      fillcolor="#718096",
+      line=dict(color="#2D3748"),
+  )
+
+  # 3. ESP Component String (Dari atas ke bawah)
+  # A. Pump Assembly
+  fig.add_shape(
+      type="rect",
+      x0=-0.5,
+      y0=38,
+      x1=0.5,
+      y1=50,
+      fillcolor="#3182CE",
+      line=dict(color="#1A365D", width=2),
+  )
+  fig.add_annotation(
+      x=0, y=44, text="ESP PUMP", showarrow=False, font=dict(color="white", size=11, family="Arial Black")
+  )
+
+  # B. Gas Separator / Intake
+  fig.add_shape(
+      type="rect",
+      x0=-0.45,
+      y0=30,
+      x1=0.45,
+      y1=38,
+      fillcolor="#DD6B20",
+      line=dict(color="#7B341E", width=2),
+  )
+  fig.add_annotation(
+      x=0, y=34, text="PUMP INTAKE", showarrow=False, font=dict(color="white", size=10)
+  )
+
+  # C. Protector / Seal Section
+  fig.add_shape(
+      type="rect",
+      x0=-0.4,
+      y0=22,
+      x1=0.4,
+      y1=30,
+      fillcolor="#D69E2E",
+      line=dict(color="#744210", width=2),
+  )
+  fig.add_annotation(
+      x=0, y=26, text="PROTECTOR", showarrow=False, font=dict(color="white", size=10)
+  )
+
+  # D. ESP Motor (Status warna bergantung temperatur)
+  motor_color = "#E53E3E" if temp_val > 115 else ("#DD6B20" if temp_val > 105 else "#38A169")
+  fig.add_shape(
+      type="rect",
+      x0=-0.45,
+      y0=8,
+      x1=0.45,
+      y1=22,
+      fillcolor=motor_color,
+      line=dict(color="#1A202C", width=2),
+  )
+  fig.add_annotation(
+      x=0, y=15, text="ESP MOTOR", showarrow=False, font=dict(color="white", size=11, family="Arial Black")
+  )
+
+  # E. Sensor Downhole / Gauge (Bottom)
+  fig.add_shape(
+      type="rect",
+      x0=-0.35,
+      y0=2,
+      x1=0.35,
+      y1=8,
+      fillcolor="#805AD5",
+      line=dict(color="#44337A", width=2),
+  )
+  fig.add_annotation(
+      x=0, y=5, text="SENSOR GAUGE", showarrow=False, font=dict(color="white", size=9)
+  )
+
+  # 4. Kabel Daya (Power Cable)
+  fig.add_trace(
+      go.Scatter(
+          x=[0.6, 0.6, 0.55],
+          y=[100, 15, 15],
+          mode="lines",
+          line=dict(color="#E53E3E", width=4),
+          name="Power Cable",
+          hoverinfo="none",
+      )
+  )
+
+  # 5. Label Penunjuk Parameter (Callout lines)
+  # Discharge Pressure
+  fig.add_annotation(
+      x=0.3, y=52, ax=1.8, ay=52, text=f"PD: {pd_val:.1f} PSI", showarrow=True, arrowhead=2, arrowcolor="#2B6CB0", font=dict(size=12, color="#2B6CB0")
+  )
+  # Intake Pressure
+  fig.add_annotation(
+      x=-0.45, y=34, ax=-1.8, ay=34, text=f"PI: {pi_val:.1f} PSI", showarrow=True, arrowhead=2, arrowcolor="#C05621", font=dict(size=12, color="#C05621")
+  )
+  # Motor Temp & Vibration
+  fig.add_annotation(
+      x=-0.45, y=15, ax=-1.8, ay=15, text=f"Temp: {temp_val:.1f} °C\nVib: {vib_val:.2f} G", showarrow=True, arrowhead=2, arrowcolor=motor_color, font=dict(size=12, color=motor_color)
+  )
+
+  fig.update_layout(
+      title=dict(text="🎨 Downhole ESP Well Schematic", x=0.5, xanchor="center"),
+      xaxis=dict(range=[-2.5, 2.5], showgrid=False, zeroline=False, showticklabels=False),
+      yaxis=dict(range=[-2, 105], showgrid=False, zeroline=False, showticklabels=False),
+      height=500,
+      margin=dict(l=10, r=10, t=40, b=10),
+      showlegend=False,
+      paper_bgcolor="rgba(0,0,0,0)",
+      plot_bgcolor="rgba(0,0,0,0)",
+  )
+
+  return fig
+
 
 # ==========================================
 # 3. TAMPILAN UTAMA DASHBOARD
@@ -320,10 +483,8 @@ if all_wells_data:
   st.markdown("---")
 
   # ==========================================
-  # ANALISIS PERFORMA ESP & DIAGNOSTIK
+  # DIAGNOSTIK & SKEMATIK DOWNHOLE
   # ==========================================
-  st.subheader("🔍 Analisis Performa & Diagnostik ESP")
-
   temp_val = latest_data["Motor_Temp_C"]
   vib_val = latest_data["Vibration_G"]
   pi_val = latest_data["PI_PSI"]
@@ -333,7 +494,6 @@ if all_wells_data:
   issues = []
   warnings = []
 
-  # Evaluasi Kriteria Operasional ESP
   if temp_val > 115:
     issues.append(
         f"🔥 **Overheating**: Temperatur motor tinggi ({temp_val:.1f} °C)."
@@ -356,7 +516,7 @@ if all_wells_data:
 
   if pi_val < 200 and pi_val > 0:
     warnings.append(
-        f"⚠️ **Low Intake Pressure**: PI rendah ({pi_val:.1f} PSI), risiko"
+        f"⚠️️ **Low Intake Pressure**: PI rendah ({pi_val:.1f} PSI), risiko"
         " gas interference/pump off."
     )
 
@@ -371,13 +531,23 @@ if all_wells_data:
         f"💧 **High Water Cut**: Konsentrasi air sangat tinggi ({wc_val:.1f}%)."
     )
 
-  c_diag1, c_diag2 = st.columns([1, 2])
+  c_schematic, c_diag = st.columns([1, 1.2])
 
-  with c_diag1:
-    st.metric("Motor Temp", f"{temp_val:.1f} °C")
-    st.metric("Vibration", f"{vib_val:.2f} G")
+  with c_schematic:
+    # Render Skematik ESP
+    fig_sch = create_esp_schematic(temp_val, vib_val, pi_val, pd_val)
+    st.plotly_chart(fig_sch, use_container_width=True)
 
-  with c_diag2:
+  with c_diag:
+    st.subheader("🔍 Analisis Performa & Diagnostik ESP")
+    st.write("---")
+
+    col_m1, col_m2 = st.columns(2)
+    col_m1.metric("Motor Temp", f"{temp_val:.1f} °C")
+    col_m2.metric("Vibration", f"{vib_val:.2f} G")
+
+    st.write("")
+
     if not issues and not warnings:
       st.success(
           "✅ **Performa Bagus / Normal**: Tidak terdeteksi anomali pada"
