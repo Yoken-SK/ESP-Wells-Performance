@@ -164,12 +164,11 @@ if uploaded_file is not None:
             ["pdischarge", "pdp", "discharge", "pdischargepsi", "p.discharge"]
         )
         df_clean["Motor_Temp_C"] = find_and_parse_flexible(
-            ["motortemp", "mtemp", "temp", "motortempc", "tmotor"],
-            default_val=95.0,
-        )
-        df_clean["Vibration_G"] = find_and_parse_flexible(
-            ["vibration", "vib", "vibrationg", "vibrasig", "vibg"],
-            default_val=1.2,
+    ["motortemp", "mtemp", "temp", "motortempc", "tmotor"], default_val=np.nan
+)
+df_clean["Vibration_G"] = find_and_parse_flexible(
+    ["vibration", "vib", "vibrationg", "vibrasig", "vibg"], default_val=np.nan
+)
         )
         df_clean["Frequency_Hz"] = (
             find_and_parse_flexible(
