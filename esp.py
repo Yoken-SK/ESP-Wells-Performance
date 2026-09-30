@@ -16,7 +16,7 @@ st.markdown(
 )
 
 # ==========================================
-# 2. SIDEBAR UPLOAD EXCEL MULTI-SHEET & DOWNHOLE DATA
+# 2. SIDEBAR UPLOAD & INPUT PARAMETER KEDALAMAN
 # ==========================================
 st.sidebar.header("📁 Unggah Laporan Lapangan")
 uploaded_file = st.sidebar.file_uploader(
@@ -29,6 +29,21 @@ uploaded_dh_file = st.sidebar.file_uploader(
     "2. Upload Data Downhole / Sensor (.csv, .xlsx)",
     type=["csv", "xlsx"],
     key="dh_uploader",
+)
+
+st.sidebar.markdown("---")
+st.sidebar.header("⚙️ Input Parameter Kedalaman Sumur (FT)")
+casing_depth_input = st.sidebar.number_input(
+    "Casing / Total Depth (ft)", value=6000, step=100
+)
+pump_depth_input = st.sidebar.number_input(
+    "Pump Setting Depth / PSD (ft)", value=4500, step=50
+)
+perf_top_input = st.sidebar.number_input(
+    "Top Perforation Depth (ft)", value=5000, step=50
+)
+perf_bot_input = st.sidebar.number_input(
+    "Bottom Perforation Depth (ft)", value=5200, step=50
 )
 
 all_wells_data = {}
@@ -83,7 +98,6 @@ if uploaded_file is not None:
           continue
         target_day_col = day_col_candidates[0]
 
-        # Deteksi Bulan & Tahun Cadangan
         detected_month = 9
         detected_year = 2026
         for idx, row in df_raw_full.iloc[:header_row_idx].iterrows():
@@ -110,7 +124,6 @@ if uploaded_file is not None:
               return pd.to_numeric(df_table[c], errors="coerce")
           return pd.Series(default_val, index=df_table.index)
 
-        # Ekstraksi Parameter Lapangan
         df_clean["Oil_Rate_BOPD"] = find_and_parse_flexible(
             ["oilbopd", "bopd", "oil", "bop"]
         )
@@ -149,7 +162,6 @@ if uploaded_file is not None:
 
         df_clean["Raw_Day"] = df_table[target_day_col]
 
-        # Pembersihan data baris teks unit
         df_clean = df_clean.dropna(
             subset=["Oil_Rate_BOPD", "Water_Rate_BWPD"], how="all"
         )
@@ -190,7 +202,6 @@ if uploaded_file is not None:
         df_clean["Date"] = df_clean["Raw_Day"].apply(parse_date_smart)
         df_clean["Date"] = df_clean["Date"].ffill().bfill()
 
-        # Deteksi Nama Sumur
         well_name_derived = (
             sheet.replace("Monitoring", "").replace("monitoring", "").strip()
         )
@@ -294,10 +305,14 @@ if uploaded_dh_file is not None and all_wells_data:
 
 
 # ==========================================
-# FUNGSI MEMBUAT SKEMATIK DOWNHOLE ESP
+# FUNGSI MEMBUAT SKEMATIK DOWNHOLE ESP DINAMIS BERDASARKAN KEDALAMAN
 # ==========================================
-def create_esp_schematic(temp_val, vib_val, pi_val, pd_val):
+def create_esp_schematic_dynamic(
+    temp_val, vib_val, pi_val, pd_val, casing_d, psd_d, perf_top, perf_bot
+):
   fig = go.Figure()
+
+  max_d = max(casing_d, perf_bot + 200)
 
   # 1. Casing (Dinding Luar Sumur)
   fig.add_shape(
@@ -305,7 +320,7 @@ def create_esp_schematic(temp_val, vib_val, pi_val, pd_val):
       x0=-1.5,
       y0=0,
       x1=-1.3,
-      y1=100,
+      y1=max_d,
       fillcolor="#4A5568",
       line=dict(color="#2D3748"),
   )
@@ -314,7 +329,7 @@ def create_esp_schematic(temp_val, vib_val, pi_val, pd_val):
       x0=1.3,
       y0=0,
       x1=1.5,
-      y1=100,
+      y1=max_d,
       fillcolor="#4A5568",
       line=dict(color="#2D3748"),
   )
@@ -325,125 +340,165 @@ def create_esp_schematic(temp_val, vib_val, pi_val, pd_val):
       x0=-1.3,
       y0=0,
       x1=1.3,
-      y1=100,
+      y1=max_d,
       fillcolor="rgba(226, 232, 240, 0.3)",
       line=dict(width=0),
   )
 
-  # 2. Production Tubing
+  # 2. Zona Perforasi (Interval Perforation)
+  fig.add_shape(
+      type="rect",
+      x0=-1.6,
+      y0=perf_top,
+      x1=-1.3,
+      y1=perf_bot,
+      fillcolor="#E53E3E",
+      line=dict(color="#9B2C2C"),
+  )
+  fig.add_shape(
+      type="rect",
+      x0=1.3,
+      y0=perf_top,
+      x1=1.6,
+      y1=perf_bot,
+      fillcolor="#E53E3E",
+      line=dict(color="#9B2C2C"),
+  )
+
+  # Panah Aliran Fluida dari Perforasi
+  for y_p in np.linspace(perf_top + 30, perf_bot - 30, 3):
+    fig.add_annotation(
+        x=-1.3, y=y_p, ax=-1.9, ay=y_p, showarrow=True, arrowhead=2, arrowcolor="#E53E3E"
+    )
+    fig.add_annotation(
+        x=1.3, y=y_p, ax=1.9, ay=y_p, showarrow=True, arrowhead=2, arrowcolor="#E53E3E"
+    )
+
+  fig.add_annotation(
+      x=2.2, y=(perf_top + perf_bot) / 2, text=f"Perforation Zone\n({perf_top:.0f} - {perf_bot:.0f} ft)", showarrow=False, font=dict(color="#C53030", size=10)
+  )
+
+  # 3. Production Tubing
   fig.add_shape(
       type="rect",
       x0=-0.3,
-      y0=50,
+      y0=0,
       x1=0.3,
-      y1=100,
+      y1=psd_d,
       fillcolor="#718096",
       line=dict(color="#2D3748"),
   )
 
-  # 3. ESP Component String (Dari atas ke bawah)
-  # A. Pump Assembly
+  # 4. ESP RTA / String Assembly (Diatur pada kedalaman PSD)
+  pump_h = 300
+  intake_h = 150
+  prot_h = 150
+  motor_h = 400
+  gauge_h = 100
+
+  # Pump
+  p_top = psd_d
+  p_bot = p_top + pump_h
   fig.add_shape(
       type="rect",
       x0=-0.5,
-      y0=38,
+      y0=p_top,
       x1=0.5,
-      y1=50,
+      y1=p_bot,
       fillcolor="#3182CE",
       line=dict(color="#1A365D", width=2),
   )
   fig.add_annotation(
-      x=0, y=44, text="ESP PUMP", showarrow=False, font=dict(color="white", size=11, family="Arial Black")
+      x=0, y=(p_top + p_bot) / 2, text="PUMP", showarrow=False, font=dict(color="white", size=10, family="Arial Black")
   )
 
-  # B. Gas Separator / Intake
+  # Intake
+  i_top = p_bot
+  i_bot = i_top + intake_h
   fig.add_shape(
       type="rect",
       x0=-0.45,
-      y0=30,
+      y0=i_top,
       x1=0.45,
-      y1=38,
+      y1=i_bot,
       fillcolor="#DD6B20",
       line=dict(color="#7B341E", width=2),
   )
   fig.add_annotation(
-      x=0, y=34, text="PUMP INTAKE", showarrow=False, font=dict(color="white", size=10)
+      x=0, y=(i_top + i_bot) / 2, text="INTAKE", showarrow=False, font=dict(color="white", size=9)
   )
 
-  # C. Protector / Seal Section
+  # Protector
+  pr_top = i_bot
+  pr_bot = pr_top + prot_h
   fig.add_shape(
       type="rect",
       x0=-0.4,
-      y0=22,
+      y0=pr_top,
       x1=0.4,
-      y1=30,
+      y1=pr_bot,
       fillcolor="#D69E2E",
       line=dict(color="#744210", width=2),
   )
-  fig.add_annotation(
-      x=0, y=26, text="PROTECTOR", showarrow=False, font=dict(color="white", size=10)
-  )
 
-  # D. ESP Motor (Status warna bergantung temperatur)
+  # Motor
+  m_top = pr_bot
+  m_bot = m_top + motor_h
   motor_color = "#E53E3E" if temp_val > 115 else ("#DD6B20" if temp_val > 105 else "#38A169")
   fig.add_shape(
       type="rect",
       x0=-0.45,
-      y0=8,
+      y0=m_top,
       x1=0.45,
-      y1=22,
+      y1=m_bot,
       fillcolor=motor_color,
       line=dict(color="#1A202C", width=2),
   )
   fig.add_annotation(
-      x=0, y=15, text="ESP MOTOR", showarrow=False, font=dict(color="white", size=11, family="Arial Black")
+      x=0, y=(m_top + m_bot) / 2, text="MOTOR", showarrow=False, font=dict(color="white", size=10, family="Arial Black")
   )
 
-  # E. Sensor Downhole / Gauge (Bottom)
+  # Sensor Gauge
+  g_top = m_bot
+  g_bot = g_top + gauge_h
   fig.add_shape(
       type="rect",
       x0=-0.35,
-      y0=2,
+      y0=g_top,
       x1=0.35,
-      y1=8,
+      y1=g_bot,
       fillcolor="#805AD5",
       line=dict(color="#44337A", width=2),
   )
-  fig.add_annotation(
-      x=0, y=5, text="SENSOR GAUGE", showarrow=False, font=dict(color="white", size=9)
-  )
 
-  # 4. Kabel Daya (Power Cable)
+  # 5. Kabel Daya (Power Cable)
   fig.add_trace(
       go.Scatter(
           x=[0.6, 0.6, 0.55],
-          y=[100, 15, 15],
+          y=[0, m_top, m_top],
           mode="lines",
-          line=dict(color="#E53E3E", width=4),
+          line=dict(color="#E53E3E", width=3),
           name="Power Cable",
           hoverinfo="none",
       )
   )
 
-  # 5. Label Penunjuk Parameter (Callout lines)
-  # Discharge Pressure
+  # 6. Callouts Data Parameter
   fig.add_annotation(
-      x=0.3, y=52, ax=1.8, ay=52, text=f"PD: {pd_val:.1f} PSI", showarrow=True, arrowhead=2, arrowcolor="#2B6CB0", font=dict(size=12, color="#2B6CB0")
+      x=-0.5, y=p_top, ax=-2.2, ay=p_top, text=f"PSD: {psd_d:.0f} ft\nPD: {pd_val:.1f} PSI", showarrow=True, arrowhead=2, arrowcolor="#2B6CB0", font=dict(size=11, color="#2B6CB0")
   )
-  # Intake Pressure
   fig.add_annotation(
-      x=-0.45, y=34, ax=-1.8, ay=34, text=f"PI: {pi_val:.1f} PSI", showarrow=True, arrowhead=2, arrowcolor="#C05621", font=dict(size=12, color="#C05621")
+      x=-0.45, y=i_top, ax=-2.2, ay=i_top, text=f"PI: {pi_val:.1f} PSI", showarrow=True, arrowhead=2, arrowcolor="#C05621", font=dict(size=11, color="#C05621")
   )
-  # Motor Temp & Vibration
   fig.add_annotation(
-      x=-0.45, y=15, ax=-1.8, ay=15, text=f"Temp: {temp_val:.1f} °C\nVib: {vib_val:.2f} G", showarrow=True, arrowhead=2, arrowcolor=motor_color, font=dict(size=12, color=motor_color)
+      x=-0.45, y=(m_top + m_bot) / 2, ax=-2.2, ay=(m_top + m_bot) / 2, text=f"Temp: {temp_val:.1f} °C\nVib: {vib_val:.2f} G", showarrow=True, arrowhead=2, arrowcolor=motor_color, font=dict(size=11, color=motor_color)
   )
 
   fig.update_layout(
       title=dict(text="🎨 Downhole ESP Well Schematic", x=0.5, xanchor="center"),
-      xaxis=dict(range=[-2.5, 2.5], showgrid=False, zeroline=False, showticklabels=False),
-      yaxis=dict(range=[-2, 105], showgrid=False, zeroline=False, showticklabels=False),
-      height=500,
+      xaxis=dict(range=[-3.0, 3.0], showgrid=False, zeroline=False, showticklabels=False),
+      yaxis=dict(range=[max_d + 100, -100], showgrid=True, title="Depth (ft)"),  # Sumbu Y dibalik (0 di atas)
+      height=580,
       margin=dict(l=10, r=10, t=40, b=10),
       showlegend=False,
       paper_bgcolor="rgba(0,0,0,0)",
@@ -516,7 +571,7 @@ if all_wells_data:
 
   if pi_val < 200 and pi_val > 0:
     warnings.append(
-        f"⚠️️ **Low Intake Pressure**: PI rendah ({pi_val:.1f} PSI), risiko"
+        f"⚠️ **Low Intake Pressure**: PI rendah ({pi_val:.1f} PSI), risiko"
         " gas interference/pump off."
     )
 
@@ -531,11 +586,20 @@ if all_wells_data:
         f"💧 **High Water Cut**: Konsentrasi air sangat tinggi ({wc_val:.1f}%)."
     )
 
-  c_schematic, c_diag = st.columns([1, 1.2])
+  c_schematic, c_diag = st.columns([1.1, 0.9])
 
   with c_schematic:
-    # Render Skematik ESP
-    fig_sch = create_esp_schematic(temp_val, vib_val, pi_val, pd_val)
+    # Render Skematik ESP Dinamis berdasarkan input kedalaman
+    fig_sch = create_esp_schematic_dynamic(
+        temp_val,
+        vib_val,
+        pi_val,
+        pd_val,
+        casing_depth_input,
+        pump_depth_input,
+        perf_top_input,
+        perf_bot_input,
+    )
     st.plotly_chart(fig_sch, use_container_width=True)
 
   with c_diag:
