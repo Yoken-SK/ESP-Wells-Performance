@@ -16,11 +16,20 @@ st.markdown(
 )
 
 # ==========================================
-# 2. SIDEBAR UPLOAD EXCEL MULTI-SHEET
+# 2. SIDEBAR UPLOAD EXCEL MULTI-SHEET & DOWNHOLE DATA
 # ==========================================
 st.sidebar.header("📁 Unggah Laporan Lapangan")
 uploaded_file = st.sidebar.file_uploader(
-    "Upload File Excel (.xlsx)", type=["xlsx"]
+    "1. Upload File Excel Produksi Utama (.xlsx)", type=["xlsx"]
+)
+
+# Fitur Tambahan: Upload Data Downhole Terpisah (CSV/Excel)
+st.sidebar.markdown("---")
+st.sidebar.header("📊 Unggah Data Downhole Khusus (Opsional)")
+uploaded_dh_file = st.sidebar.file_uploader(
+    "2. Upload Data Downhole / Sensor (.csv, .xlsx)",
+    type=["csv", "xlsx"],
+    key="dh_uploader",
 )
 
 all_wells_data = {}
@@ -210,6 +219,78 @@ if uploaded_file is not None:
     st.sidebar.error(f"Eror pembacaan file: {e}")
 
 # ==========================================
+# AMBIL & METAKAN DATA DOWNHOLE TERPISAH (JIKA DIUNGGAH)
+# ==========================================
+if uploaded_dh_file is not None and all_wells_data:
+  try:
+    if uploaded_dh_file.name.endswith(".csv"):
+      df_dh_upload = pd.read_csv(uploaded_dh_file)
+    else:
+      df_dh_upload = pd.read_excel(uploaded_dh_file)
+
+    # Bersihkan nama kolom
+    df_dh_upload.columns = df_dh_upload.columns.str.strip().str.lower()
+
+    # Cari kolom tanggal, temp, vibrasi
+    date_col = next(
+        (
+            c
+            for c in df_dh_upload.columns
+            if "date" in c or "tgl" in c or "time" in c or "tanggal" in c
+        ),
+        None,
+    )
+    temp_col = next(
+        (
+            c
+            for c in df_dh_upload.columns
+            if "temp" in c or "suhu" in c or "tmotor" in c
+        ),
+        None,
+    )
+    vib_col = next(
+        (
+            c
+            for c in df_dh_upload.columns
+            if "vib" in c or "vibration" in c or "getaran" in c
+        ),
+        None,
+    )
+
+    if date_col:
+      df_dh_upload["Date_Parsed"] = pd.to_datetime(
+          df_dh_upload[date_col], errors="coerce"
+      )
+
+      for well_k in all_wells_data.keys():
+        df_target = all_wells_data[well_k]
+        # Merge berdasarkan tanggal
+        if temp_col:
+          df_dh_upload[temp_col] = pd.to_numeric(
+              df_dh_upload[temp_col], errors="coerce"
+          )
+          temp_map = df_dh_upload.dropna(subset=["Date_Parsed", temp_col]).set_index("Date_Parsed")[temp_col]
+          df_target["Motor_Temp_C"] = (
+              df_target["Date"].map(temp_map).fillna(df_target["Motor_Temp_C"])
+          )
+
+        if vib_col:
+          df_dh_upload[vib_col] = pd.to_numeric(
+              df_dh_upload[vib_col], errors="coerce"
+          )
+          vib_map = df_dh_upload.dropna(subset=["Date_Parsed", vib_col]).set_index("Date_Parsed")[vib_col]
+          df_target["Vibration_G"] = (
+              df_target["Date"].map(vib_map).fillna(df_target["Vibration_G"])
+          )
+
+        all_wells_data[well_k] = df_target
+
+      st.sidebar.success("✅ Data Sensor Downhole terpisah berhasil diintegrasikan!")
+
+  except Exception as ex:
+    st.sidebar.warning(f"Gagal membaca data sensor terpisah: {ex}")
+
+# ==========================================
 # 3. TAMPILAN UTAMA DASHBOARD
 # ==========================================
 if all_wells_data:
@@ -239,7 +320,7 @@ if all_wells_data:
   st.markdown("---")
 
   # ==========================================
-  # FITUR BARU: ANALISIS PERFORMA ESP & DIAGNOSTIK
+  # ANALISIS PERFORMA ESP & DIAGNOSTIK
   # ==========================================
   st.subheader("🔍 Analisis Performa & Diagnostik ESP")
 
@@ -394,6 +475,7 @@ if all_wells_data:
             "Pump Intake (PI)",
             "Pump Discharge (PD)",
             "Motor Temp (°C)",
+            "Vibration (G)",
         ],
     )
 
