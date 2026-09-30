@@ -27,10 +27,6 @@ st.markdown(
 )
 
 st.title("⚡ ESP Production & Downhole Monitoring Dashboard")
-st.markdown(
-    "Dashboard otomatis mendeteksi sheet berlabel **'Monitoring'** dari file"
-    " Excel lapangan Anda."
-)
 
 # ==========================================
 # 2. SIDEBAR UPLOAD & INPUT PARAMETER KEDALAMAN
@@ -554,7 +550,7 @@ def create_esp_schematic_dynamic(
       ),
       yaxis=dict(
           range=[max_d + 100, -100], showgrid=True, title="Depth (ft)"
-      ),  # Dibalik
+      ),
       height=380,
       margin=dict(l=0, r=0, t=30, b=0),
       showlegend=False,
@@ -590,7 +586,6 @@ if all_wells_data:
   wc_val = latest_data["Water_Cut_Percent"]
 
   with c_left_schematic:
-    # Render Skematik ESP dengan ukuran ramping
     fig_sch = create_esp_schematic_dynamic(
         temp_val,
         vib_val,
@@ -606,7 +601,6 @@ if all_wells_data:
   with c_right_metrics:
     st.markdown("### 📈 Ringkasan Parameter & Produksi")
 
-    # Metrics Produksi & Downhole Lebih Luas & Jelas
     m_col1, m_col2, m_col3, m_col4 = st.columns(4)
     m_col1.metric("Oil Rate", f"{latest_data['Oil_Rate_BOPD']:.1f}", "BOPD")
     m_col2.metric("Water Rate", f"{latest_data['Water_Rate_BWPD']:.1f}", "BWPD")
@@ -621,7 +615,6 @@ if all_wells_data:
 
     st.write("---")
 
-    # Diagnostik
     issues = []
     warnings = []
 
@@ -640,7 +633,7 @@ if all_wells_data:
       )
     elif vib_val > 1.8:
       warnings.append(
-          f"⚠️️ **Warning Vibrasi**: Vibrasi tinggi ({vib_val:.2f} G)."
+          f"⚠ **Warning Vibrasi**: Vibrasi tinggi ({vib_val:.2f} G)."
       )
 
     if pi_val < 200 and pi_val > 0:
