@@ -9,13 +9,13 @@ import streamlit as st
 # ==========================================
 st.set_page_config(page_title="ESP Well Dashboard", layout="wide")
 
-# Custom CSS untuk mengecilkan ukuran angka metric agar lebih proporsional
+# Custom CSS untuk merapikan ukuran metric dan kontainer
 st.markdown(
     """
     <style>
     [data-testid="stMetricValue"] {
-        font-size: 1.6rem !important;
-        font-weight: 600;
+        font-size: 1.5rem !important;
+        font-weight: 700;
     }
     [data-testid="stMetricLabel"] {
         font-size: 0.85rem !important;
@@ -322,7 +322,7 @@ if uploaded_dh_file is not None and all_wells_data:
 
 
 # ==========================================
-# FUNGSI MEMBUAT SKEMATIK DOWNHOLE ESP
+# FUNGSI MEMBUAT SKEMATIK DOWNHOLE ESP (RAMPUNG & COMPACT)
 # ==========================================
 def create_esp_schematic_dynamic(
     temp_val, vib_val, pi_val, pd_val, casing_d, psd_d, perf_top, perf_bot
@@ -331,21 +331,21 @@ def create_esp_schematic_dynamic(
 
   max_d = max(casing_d, perf_bot + 200)
 
-  # Casing
+  # Casing Ramping (-0.8 s/d 0.8)
   fig.add_shape(
       type="rect",
-      x0=-1.5,
+      x0=-0.8,
       y0=0,
-      x1=-1.3,
+      x1=-0.7,
       y1=max_d,
       fillcolor="#4A5568",
       line=dict(color="#2D3748"),
   )
   fig.add_shape(
       type="rect",
-      x0=1.3,
+      x0=0.7,
       y0=0,
-      x1=1.5,
+      x1=0.8,
       y1=max_d,
       fillcolor="#4A5568",
       line=dict(color="#2D3748"),
@@ -354,9 +354,9 @@ def create_esp_schematic_dynamic(
   # Fluida Annulus
   fig.add_shape(
       type="rect",
-      x0=-1.3,
+      x0=-0.7,
       y0=0,
-      x1=1.3,
+      x1=0.7,
       y1=max_d,
       fillcolor="rgba(226, 232, 240, 0.3)",
       line=dict(width=0),
@@ -365,63 +365,55 @@ def create_esp_schematic_dynamic(
   # Zona Perforasi
   fig.add_shape(
       type="rect",
-      x0=-1.6,
+      x0=-0.9,
       y0=perf_top,
-      x1=-1.3,
+      x1=-0.7,
       y1=perf_bot,
       fillcolor="#E53E3E",
       line=dict(color="#9B2C2C"),
   )
   fig.add_shape(
       type="rect",
-      x0=1.3,
+      x0=0.7,
       y0=perf_top,
-      x1=1.6,
+      x1=0.9,
       y1=perf_bot,
       fillcolor="#E53E3E",
       line=dict(color="#9B2C2C"),
   )
 
-  for y_p in np.linspace(perf_top + 30, perf_bot - 30, 3):
+  for y_p in np.linspace(perf_top + 30, perf_bot - 30, 2):
     fig.add_annotation(
-        x=-1.3,
+        x=-0.7,
         y=y_p,
-        ax=-1.9,
+        ax=-1.0,
         ay=y_p,
         showarrow=True,
         arrowhead=2,
         arrowcolor="#E53E3E",
     )
     fig.add_annotation(
-        x=1.3,
+        x=0.7,
         y=y_p,
-        ax=1.9,
+        ax=1.0,
         ay=y_p,
         showarrow=True,
         arrowhead=2,
         arrowcolor="#E53E3E",
     )
-
-  fig.add_annotation(
-      x=2.2,
-      y=(perf_top + perf_bot) / 2,
-      text=f"Perf Zone\n({perf_top:.0f}-{perf_bot:.0f}ft)",
-      showarrow=False,
-      font=dict(color="#C53030", size=9),
-  )
 
   # Tubing
   fig.add_shape(
       type="rect",
-      x0=-0.3,
+      x0=-0.15,
       y0=0,
-      x1=0.3,
+      x1=0.15,
       y1=psd_d,
       fillcolor="#718096",
       line=dict(color="#2D3748"),
   )
 
-  # Pump String Components
+  # ESP String Components (Compact Width)
   pump_h = 300
   intake_h = 150
   prot_h = 150
@@ -432,50 +424,50 @@ def create_esp_schematic_dynamic(
   p_bot = p_top + pump_h
   fig.add_shape(
       type="rect",
-      x0=-0.5,
+      x0=-0.3,
       y0=p_top,
-      x1=0.5,
+      x1=0.3,
       y1=p_bot,
       fillcolor="#3182CE",
-      line=dict(color="#1A365D", width=2),
+      line=dict(color="#1A365D", width=1.5),
   )
   fig.add_annotation(
       x=0,
       y=(p_top + p_bot) / 2,
       text="PUMP",
       showarrow=False,
-      font=dict(color="white", size=9, family="Arial Black"),
+      font=dict(color="white", size=8, family="Arial Black"),
   )
 
   i_top = p_bot
   i_bot = i_top + intake_h
   fig.add_shape(
       type="rect",
-      x0=-0.45,
+      x0=-0.28,
       y0=i_top,
-      x1=0.45,
+      x1=0.28,
       y1=i_bot,
       fillcolor="#DD6B20",
-      line=dict(color="#7B341E", width=2),
+      line=dict(color="#7B341E", width=1.5),
   )
   fig.add_annotation(
       x=0,
       y=(i_top + i_bot) / 2,
-      text="INTAKE",
+      text="INK",
       showarrow=False,
-      font=dict(color="white", size=8),
+      font=dict(color="white", size=7),
   )
 
   pr_top = i_bot
   pr_bot = pr_top + prot_h
   fig.add_shape(
       type="rect",
-      x0=-0.4,
+      x0=-0.25,
       y0=pr_top,
-      x1=0.4,
+      x1=0.25,
       y1=pr_bot,
       fillcolor="#D69E2E",
-      line=dict(color="#744210", width=2),
+      line=dict(color="#744210", width=1.5),
   )
 
   m_top = pr_bot
@@ -487,96 +479,84 @@ def create_esp_schematic_dynamic(
   )
   fig.add_shape(
       type="rect",
-      x0=-0.45,
+      x0=-0.28,
       y0=m_top,
-      x1=0.45,
+      x1=0.28,
       y1=m_bot,
       fillcolor=motor_color,
-      line=dict(color="#1A202C", width=2),
+      line=dict(color="#1A202C", width=1.5),
   )
   fig.add_annotation(
       x=0,
       y=(m_top + m_bot) / 2,
-      text="MOTOR",
+      text="MTR",
       showarrow=False,
-      font=dict(color="white", size=9, family="Arial Black"),
+      font=dict(color="white", size=8, family="Arial Black"),
   )
 
   g_top = m_bot
   g_bot = g_top + gauge_h
   fig.add_shape(
       type="rect",
-      x0=-0.35,
+      x0=-0.2,
       y0=g_top,
-      x1=0.35,
+      x1=0.2,
       y1=g_bot,
       fillcolor="#805AD5",
-      line=dict(color="#44337A", width=2),
+      line=dict(color="#44337A", width=1.5),
   )
 
   # Cable
   fig.add_trace(
       go.Scatter(
-          x=[0.6, 0.6, 0.55],
+          x=[0.35, 0.35, 0.3],
           y=[0, m_top, m_top],
           mode="lines",
-          line=dict(color="#E53E3E", width=3),
+          line=dict(color="#E53E3E", width=2),
           showlegend=False,
           hoverinfo="none",
       )
   )
 
-  # Callouts
+  # Simple Direct Annotations
   fig.add_annotation(
-      x=-0.5,
+      x=-0.3,
       y=p_top,
-      ax=-2.2,
+      ax=-1.1,
       ay=p_top,
-      text=f"PSD: {psd_d:.0f}ft",
+      text=f"PSD:{psd_d:.0f}'",
       showarrow=True,
-      arrowhead=2,
+      arrowhead=1,
       arrowcolor="#2B6CB0",
-      font=dict(size=10, color="#2B6CB0"),
+      font=dict(size=9, color="#2B6CB0"),
   )
   fig.add_annotation(
-      x=-0.45,
-      y=i_top,
-      ax=-2.2,
-      ay=i_top,
-      text=f"PI: {pi_val:.0f}PSI",
-      showarrow=True,
-      arrowhead=2,
-      arrowcolor="#C05621",
-      font=dict(size=10, color="#C05621"),
-  )
-  fig.add_annotation(
-      x=-0.45,
+      x=-0.28,
       y=(m_top + m_bot) / 2,
-      ax=-2.2,
+      ax=-1.1,
       ay=(m_top + m_bot) / 2,
-      text=f"{temp_val:.1f}°C\n{vib_val:.2f}G",
+      text=f"{temp_val:.0f}°C",
       showarrow=True,
-      arrowhead=2,
+      arrowhead=1,
       arrowcolor=motor_color,
-      font=dict(size=10, color=motor_color),
+      font=dict(size=9, color=motor_color),
   )
 
   fig.update_layout(
       title=dict(
-          text="🎨 ESP Well Schematic",
-          x=0.5,
-          xanchor="center",
-          font=dict(size=14),
+          text="🎨 ESP Schematic", x=0.5, xanchor="center", font=dict(size=12)
       ),
       xaxis=dict(
-          range=[-3.0, 3.0],
+          range=[-1.5, 1.5],
           showgrid=False,
           zeroline=False,
           showticklabels=False,
       ),
-      yaxis=dict(range=[max_d + 100, -100], showgrid=True, title="Depth (ft)"),
-      height=400,
-      margin=dict(l=5, r=5, t=35, b=5),
+      yaxis=dict(
+          range=[max_d + 100, -100], showgrid=True, title="Depth (ft)"
+      ),  # Dibalik
+      height=380,
+      margin=dict(l=0, r=0, t=30, b=0),
       showlegend=False,
       paper_bgcolor="rgba(0,0,0,0)",
       plot_bgcolor="rgba(0,0,0,0)",
@@ -600,8 +580,8 @@ if all_wells_data:
       f" ({latest_data['Date'].strftime('%d-%b-%Y')})"
   )
 
-  # Layout Atas: Skematik di Sebelah Kiri, Metric Produksi Proporsional di Sebelah Kanan
-  c_left_schematic, c_right_metrics = st.columns([1, 2.2])
+  # Layout Atas: Skematik Sangat Ramping [0.7] di Kiri, Data Produksi Luas [2.3] di Kanan
+  c_left_schematic, c_right_metrics = st.columns([0.7, 2.3])
 
   temp_val = latest_data["Motor_Temp_C"]
   vib_val = latest_data["Vibration_G"]
@@ -610,7 +590,7 @@ if all_wells_data:
   wc_val = latest_data["Water_Cut_Percent"]
 
   with c_left_schematic:
-    # Skematik ESP di sebelah kiri
+    # Render Skematik ESP dengan ukuran ramping
     fig_sch = create_esp_schematic_dynamic(
         temp_val,
         vib_val,
@@ -626,7 +606,7 @@ if all_wells_data:
   with c_right_metrics:
     st.markdown("### 📈 Ringkasan Parameter & Produksi")
 
-    # Grid Metric Produksi Ringkas & Proporsional
+    # Metrics Produksi & Downhole Lebih Luas & Jelas
     m_col1, m_col2, m_col3, m_col4 = st.columns(4)
     m_col1.metric("Oil Rate", f"{latest_data['Oil_Rate_BOPD']:.1f}", "BOPD")
     m_col2.metric("Water Rate", f"{latest_data['Water_Rate_BWPD']:.1f}", "BWPD")
@@ -641,7 +621,7 @@ if all_wells_data:
 
     st.write("---")
 
-    # Diagnostik Ringkas
+    # Diagnostik
     issues = []
     warnings = []
 
@@ -660,7 +640,7 @@ if all_wells_data:
       )
     elif vib_val > 1.8:
       warnings.append(
-          f"⚠️ **Warning Vibrasi**: Vibrasi tinggi ({vib_val:.2f} G)."
+          f"⚠️️ **Warning Vibrasi**: Vibrasi tinggi ({vib_val:.2f} G)."
       )
 
     if pi_val < 200 and pi_val > 0:
