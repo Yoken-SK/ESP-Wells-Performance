@@ -10,45 +10,54 @@ import streamlit as st
 st.set_page_config(
     page_title="ESP Well Dashboard",
     layout="wide",
-    initial_sidebar_state="collapsed",  # Sidebar otomatis terlipat di HP agar layar utama lega
+    initial_sidebar_state="collapsed",
 )
 
-# Custom CSS untuk Responsivitas Mobile & Tablet
+# Custom CSS untuk Tablet Optimization & Compact Spacing
 st.markdown(
     """
     <style>
-    /* Meta tag simulation & padding adjustment */
     .block-container {
-        padding-top: 1.5rem !important;
-        padding-bottom: 1.5rem !important;
-        padding-left: 1rem !important;
-        padding-right: 1rem !important;
+        padding-top: 1rem !important;
+        padding-bottom: 1rem !important;
+        padding-left: 0.8rem !important;
+        padding-right: 0.8rem !important;
     }
     
-    /* Responsive Font Sizes for Metrics */
-    [data-testid="stMetricValue"] {
-        font-size: clamp(1.1rem, 2.5vw, 1.5rem) !important;
-        font-weight: 700;
+    /* Mengurangi jarak antarkartu metric di Tablet/Mobile */
+    [data-testid="stMetric"] {
+        padding: 4px 8px !important;
+        margin-bottom: -10px !important;
     }
+    
+    [data-testid="stMetricValue"] {
+        font-size: clamp(1.1rem, 2.2vw, 1.4rem) !important;
+        font-weight: 700;
+        line-height: 1.1 !important;
+    }
+    
     [data-testid="stMetricLabel"] {
-        font-size: clamp(0.75rem, 1.5vw, 0.85rem) !important;
+        font-size: clamp(0.75rem, 1.3vw, 0.85rem) !important;
         color: #4A5568;
+        margin-bottom: 2px !important;
     }
 
-    /* Responsive Plotly Chart Container */
+    /* Mengurangi spacing horizontal antar kolom di Streamlit */
+    [data-testid="column"] {
+        padding: 0px 4px !important;
+    }
+
     .stPlotlyChart {
         width: 100% !important;
     }
 
-    /* Mobile Friendly Typography */
-    h1 {
-        font-size: clamp(1.4rem, 4vw, 2.2rem) !important;
-    }
-    h2 {
-        font-size: clamp(1.2rem, 3vw, 1.8rem) !important;
-    }
-    h3 {
-        font-size: clamp(1.0rem, 2.5vw, 1.4rem) !important;
+    h1 { font-size: clamp(1.3rem, 3.5vw, 2.0rem) !important; }
+    h2 { font-size: clamp(1.1rem, 2.8vw, 1.6rem) !important; }
+    h3 { font-size: clamp(0.95rem, 2.2vw, 1.2rem) !important; }
+    
+    hr {
+        margin-top: 0.5rem !important;
+        margin-bottom: 0.8rem !important;
     }
     </style>
 """,
@@ -75,6 +84,14 @@ uploaded_dh_file = st.sidebar.file_uploader(
 
 if "well_depth_params" not in st.session_state:
   st.session_state["well_depth_params"] = {}
+
+# Session state untuk tracking key perbaikan zoom
+if "reset_sch_key" not in st.session_state:
+  st.session_state["reset_sch_key"] = 0
+if "reset_prod_key" not in st.session_state:
+  st.session_state["reset_prod_key"] = 0
+if "reset_dh_key" not in st.session_state:
+  st.session_state["reset_dh_key"] = 0
 
 DEFAULT_DEPTH_CONFIGS = {
     "GE-4": {
@@ -353,7 +370,7 @@ if uploaded_dh_file is not None and all_wells_data:
 
 
 # ==========================================
-# 4. FUNGSI MEMBUAT SKEMATIK ESP RESPONSIVE
+# 4. FUNGSI MEMBUAT SKEMATIK ESP
 # ==========================================
 def create_esp_schematic_dynamic(
     temp_val, vib_val, pi_val, pd_val, casing_d, psd_d, perf_top, perf_bot
@@ -581,16 +598,31 @@ def create_esp_schematic_dynamic(
           showticklabels=False,
       ),
       yaxis=dict(range=[max_d + 100, -100], showgrid=True, title="Depth (ft)"),
-      height=350,
-      margin=dict(l=10, r=10, t=30, b=10),
+      height=360,
+      margin=dict(l=5, r=5, t=30, b=10),
       showlegend=False,
       paper_bgcolor="rgba(0,0,0,0)",
       plot_bgcolor="rgba(0,0,0,0)",
       autosize=True,
+      # Konfigurasi dragmode bawaan pan / zoom
+      dragmode="pan",
   )
 
   return fig
 
+
+# Configurations Plotly Config (Menampilkan Tombol Zoom, Reset View, dll.)
+PLOTLY_CONFIG = {
+    "displayModeBar": True,
+    "displaylogo": False,
+    "scrollZoom": True,
+    "modeBarButtonsToAdd": ["drawline", "drawopenpath", "eraseshape"],
+    "modeBarButtonsToRemove": [],
+    "toImageButtonOptions": {
+        "format": "png",
+        "filename": "esp_dashboard_export",
+    },
+}
 
 # ==========================================
 # 5. TAMPILAN DASHBOARD & LOGIKA RESPONSIVE LAYOUT
@@ -648,8 +680,7 @@ if all_wells_data:
       f" ({latest_data['Date'].strftime('%d-%b-%Y')})"
   )
 
-  # Layout Atas: Di HP otomatis menyusun vertikal
-  c_left_schematic, c_right_metrics = st.columns([1, 2])
+  c_left_schematic, c_right_metrics = st.columns([1, 2.2])
 
   temp_val = latest_data["Motor_Temp_C"]
   vib_val = latest_data["Vibration_G"]
@@ -668,32 +699,39 @@ if all_wells_data:
         perf_top_input,
         perf_bot_input,
     )
-    st.plotly_chart(fig_sch, use_container_width=True)
+
+    st.plotly_chart(
+        fig_sch,
+        use_container_width=True,
+        config=PLOTLY_CONFIG,
+        key=f"sch_plot_{st.session_state['reset_sch_key']}",
+    )
+
+    # Tombol Reset View khusus Skematik
+    if st.button("🔄 Reset Zoom Skematik", key="btn_reset_sch"):
+      st.session_state["reset_sch_key"] += 1
+      st.rerun()
 
   with c_right_metrics:
     st.markdown("### 📈 Ringkasan Parameter")
 
-    # Grid Metric 2x2 untuk HP/Tablet agar rapi
-    m_col1, m_col2 = st.columns(2)
+    # Metrics 4 Kolom di Rapat dalam Layar Tablet
+    m_col1, m_col2, m_col3, m_col4 = st.columns(4)
     m_col1.metric("Oil Rate", f"{latest_data['Oil_Rate_BOPD']:.1f}", "BOPD")
     m_col2.metric("Water Rate", f"{latest_data['Water_Rate_BWPD']:.1f}", "BWPD")
-
-    m_col3, m_col4 = st.columns(2)
     m_col3.metric("Water Cut", f"{latest_data['Water_Cut_Percent']:.1f}", "%")
     m_col4.metric("Gas Rate", f"{latest_data['Gas_Rate_MSCFD']:.1f}", "MCFD")
 
-    st.write("---")
+    st.markdown("<hr style='margin: 4px 0px;'>", unsafe_allow_html=True)
 
-    m_col5, m_col6 = st.columns(2)
+    m_col5, m_col6, m_col7, m_col8 = st.columns(4)
     m_col5.metric("Pump Intake", f"{latest_data['PI_PSI']:.1f}", "PSI")
-    m_col6.metric("Pump Discharge", f"{latest_data['PD_PSI']:.1f}", "PSI")
-
-    m_col7, m_col8 = st.columns(2)
-    m_col7.metric("VSD Frequency", f"{latest_data['Frequency_Hz']:.1f}", "Hz")
+    m_col6.metric("Discharge", f"{latest_data['PD_PSI']:.1f}", "PSI")
+    m_col7.metric("Frequency", f"{latest_data['Frequency_Hz']:.1f}", "Hz")
     temp_disp = f"{temp_val:.1f}" if pd.notnull(temp_val) else "-"
     m_col8.metric("Motor Temp", temp_disp, "°C")
 
-    st.write("---")
+    st.markdown("<hr style='margin: 4px 0px;'>", unsafe_allow_html=True)
 
     issues, warnings = [], []
     if pd.notnull(temp_val):
@@ -714,7 +752,7 @@ if all_wells_data:
         )
       elif vib_val > 1.8:
         warnings.append(
-            f"⚠ **Warning Vibrasi**: Vibrasi tinggi ({vib_val:.2f} G)."
+            f"⚠️ **Warning Vibrasi**: Vibrasi tinggi ({vib_val:.2f} G)."
         )
 
     if pi_val < 200 and pi_val > 0:
@@ -741,7 +779,14 @@ if all_wells_data:
   col_graph, col_anim = st.columns([1, 1])
 
   with col_graph:
-    st.subheader("📈 Tren Produksi")
+    c_title1, c_btn1 = st.columns([2.5, 1])
+    with c_title1:
+      st.subheader("📈 Tren Produksi")
+    with c_btn1:
+      if st.button("🔄 Reset Zoom", key="btn_reset_prod"):
+        st.session_state["reset_prod_key"] += 1
+        st.rerun()
+
     selected_prod = st.multiselect(
         "Pilih Parameter Produksi:",
         options=["Oil Rate (BOPD)", "Water Rate (BWPD)", "Gas Rate (MCFD)"],
@@ -790,15 +835,27 @@ if all_wells_data:
             title="Gas (MCFD)", overlaying="y", side="right", showgrid=False
         ),
         legend=dict(
-            orientation="h", yanchor="top", y=-0.2, xanchor="center", x=0.5
+            orientation="h", yanchor="top", y=-0.22, xanchor="center", x=0.5
         ),
-        margin=dict(l=20, r=20, t=40, b=60),
+        margin=dict(l=15, r=15, t=35, b=55),
         autosize=True,
     )
-    st.plotly_chart(fig_prod, use_container_width=True)
+    st.plotly_chart(
+        fig_prod,
+        use_container_width=True,
+        config=PLOTLY_CONFIG,
+        key=f"prod_plot_{st.session_state['reset_prod_key']}",
+    )
 
   with col_anim:
-    st.subheader("📉 Downhole Monitoring")
+    c_title2, c_btn2 = st.columns([2.5, 1])
+    with c_title2:
+      st.subheader("📉 Downhole Monitoring")
+    with c_btn2:
+      if st.button("🔄 Reset Zoom", key="btn_reset_dh"):
+        st.session_state["reset_dh_key"] += 1
+        st.rerun()
+
     selected_dh = st.multiselect(
         "Pilih Parameter Downhole:",
         options=[
@@ -868,9 +925,14 @@ if all_wells_data:
             title="Temp/Vib", overlaying="y", side="right", showgrid=False
         ),
         legend=dict(
-            orientation="h", yanchor="top", y=-0.2, xanchor="center", x=0.5
+            orientation="h", yanchor="top", y=-0.22, xanchor="center", x=0.5
         ),
-        margin=dict(l=20, r=20, t=40, b=60),
+        margin=dict(l=15, r=15, t=35, b=55),
         autosize=True,
     )
-    st.plotly_chart(fig_dh, use_container_width=True)
+    st.plotly_chart(
+        fig_dh,
+        use_container_width=True,
+        config=PLOTLY_CONFIG,
+        key=f"dh_plot_{st.session_state['reset_dh_key']}",
+    )
