@@ -163,21 +163,22 @@ if uploaded_file is not None:
         df_clean["PD_PSI"] = find_and_parse_flexible(
             ["pdischarge", "pdp", "discharge", "pdischargepsi", "p.discharge"]
         )
+
+        # Default np.nan agar tidak otomatis muncul angka dummy jika belum ada data sensor
         df_clean["Motor_Temp_C"] = find_and_parse_flexible(
-    ["motortemp", "mtemp", "temp", "motortempc", "tmotor"], default_val=np.nan
-)
-df_clean["Vibration_G"] = find_and_parse_flexible(
-    ["vibration", "vib", "vibrationg", "vibrasig", "vibg"], default_val=np.nan
-)
+            ["motortemp", "mtemp", "temp", "motortempc", "tmotor"],
+            default_val=np.nan,
         )
-        df_clean["Frequency_Hz"] = (
-            find_and_parse_flexible(
-                ["freqhz", "hz", "freq", "vsd"], default_val=40
-            )
-            .ffill()
-            .bfill()
-            .fillna(40)
+        df_clean["Vibration_G"] = find_and_parse_flexible(
+            ["vibration", "vib", "vibrationg", "vibrasig", "vibg"],
+            default_val=np.nan,
         )
+
+        # Perbaikan syntax error pada bagian Frequency
+        freq_series = find_and_parse_flexible(
+            ["freqhz", "hz", "freq", "vsd"], default_val=40
+        )
+        df_clean["Frequency_Hz"] = freq_series.ffill().bfill().fillna(40)
 
         df_clean["Raw_Day"] = df_table[target_day_col]
 
@@ -187,12 +188,8 @@ df_clean["Vibration_G"] = find_and_parse_flexible(
 
         df_clean["PI_PSI"] = df_clean["PI_PSI"].ffill().bfill().fillna(0)
         df_clean["PD_PSI"] = df_clean["PD_PSI"].ffill().bfill().fillna(0)
-        df_clean["Motor_Temp_C"] = (
-            df_clean["Motor_Temp_C"].ffill().bfill().fillna(95.0)
-        )
-        df_clean["Vibration_G"] = (
-            df_clean["Vibration_G"].ffill().bfill().fillna(1.2)
-        )
+        df_clean["Motor_Temp_C"] = df_clean["Motor_Temp_C"].ffill().bfill()
+        df_clean["Vibration_G"] = df_clean["Vibration_G"].ffill().bfill()
         df_clean["Oil_Rate_BOPD"] = df_clean["Oil_Rate_BOPD"].fillna(0)
         df_clean["Water_Rate_BWPD"] = df_clean["Water_Rate_BWPD"].fillna(0)
 
@@ -236,7 +233,6 @@ df_clean["Vibration_G"] = find_and_parse_flexible(
         df_clean["Well_Name"] = well_name_derived
         all_wells_data[well_name_derived] = df_clean.sort_values("Date")
 
-        # Inisialisasi parameter kedalaman jika sumur baru terdeteksi
         if well_name_derived not in st.session_state["well_depth_params"]:
           if well_name_derived in DEFAULT_DEPTH_CONFIGS:
             st.session_state["well_depth_params"][well_name_derived] = (
@@ -476,10 +472,12 @@ def create_esp_schematic_dynamic(
 
   m_top = pr_bot
   m_bot = m_top + motor_h
+
+  temp_num = temp_val if pd.notnull(temp_val) else 0
   motor_color = (
       "#E53E3E"
-      if temp_val > 115
-      else ("#DD6B20" if temp_val > 105 else "#38A169")
+      if temp_num > 115
+      else ("#DD6B20" if temp_num > 105 else "#38A169")
   )
   fig.add_shape(
       type="rect",
@@ -532,12 +530,14 @@ def create_esp_schematic_dynamic(
       arrowcolor="#2B6CB0",
       font=dict(size=9, color="#2B6CB0"),
   )
+
+  temp_text = f"{temp_val:.0f}°C" if pd.notnull(temp_val) else "N/A"
   fig.add_annotation(
       x=-0.28,
       y=(m_top + m_bot) / 2,
       ax=-1.1,
       ay=(m_top + m_bot) / 2,
-      text=f"{temp_val:.0f}°C",
+      text=temp_text,
       showarrow=True,
       arrowhead=1,
       arrowcolor=motor_color,
@@ -573,7 +573,6 @@ if all_wells_data:
       "Pilih Sumur ESP:", list(all_wells_data.keys())
   )
 
-  # Ambil Konfigurasi Kedalaman Spesifik untuk Sumur Terpilih
   current_depths = st.session_state["well_depth_params"].get(
       selected_well,
       {"casing": 6000.0, "psd": 4500.0, "perf_top": 5000.0, "perf_bot": 5200.0},
@@ -582,7 +581,6 @@ if all_wells_data:
   st.sidebar.markdown("---")
   st.sidebar.header(f"⚙️ Input Kedalaman Sumur ({selected_well})")
 
-  # Widget input yang nilainya terikat dengan sumur yang sedang dipilih melalui key dinamis
   casing_depth_input = st.sidebar.number_input(
       "Casing / Total Depth (ft)",
       value=float(current_depths["casing"]),
@@ -608,7 +606,6 @@ if all_wells_data:
       key=f"perfbot_{selected_well}",
   )
 
-  # Simpan perubahan parameter kedalaman yang disesuaikan pengguna
   st.session_state["well_depth_params"][selected_well] = {
       "casing": casing_depth_input,
       "psd": pump_depth_input,
@@ -658,28 +655,33 @@ if all_wells_data:
     m_col5.metric("Pump Intake", f"{latest_data['PI_PSI']:.1f}", "PSI")
     m_col6.metric("Pump Discharge", f"{latest_data['PD_PSI']:.1f}", "PSI")
     m_col7.metric("VSD Frequency", f"{latest_data['Frequency_Hz']:.1f}", "Hz")
-    m_col8.metric("Motor Temp", f"{temp_val:.1f}", "°C")
+
+    temp_disp = f"{temp_val:.1f}" if pd.notnull(temp_val) else "-"
+    m_col8.metric("Motor Temp", temp_disp, "°C")
 
     st.write("---")
 
     issues, warnings = [], []
-    if temp_val > 115:
-      issues.append(
-          f"🔥 **Overheating**: Temperatur motor tinggi ({temp_val:.1f} °C)."
-      )
-    elif temp_val > 105:
-      warnings.append(
-          f"⚠️ **Warning Temp**: Temperatur mendekati limit ({temp_val:.1f} °C)."
-      )
+    if pd.notnull(temp_val):
+      if temp_val > 115:
+        issues.append(
+            f"🔥 **Overheating**: Temperatur motor tinggi ({temp_val:.1f} °C)."
+        )
+      elif temp_val > 105:
+        warnings.append(
+            f"⚠️ **Warning Temp**: Temperatur mendekati limit"
+            f" ({temp_val:.1f} °C)."
+        )
 
-    if vib_val > 2.5:
-      issues.append(
-          f"🚨 **High Vibration**: Vibrasi berlebih ({vib_val:.2f} G)."
-      )
-    elif vib_val > 1.8:
-      warnings.append(
-          f"⚠ **Warning Vibrasi**: Vibrasi tinggi ({vib_val:.2f} G)."
-      )
+    if pd.notnull(vib_val):
+      if vib_val > 2.5:
+        issues.append(
+            f"🚨 **High Vibration**: Vibrasi berlebih ({vib_val:.2f} G)."
+        )
+      elif vib_val > 1.8:
+        warnings.append(
+            f"⚠ **Warning Vibrasi**: Vibrasi tinggi ({vib_val:.2f} G)."
+        )
 
     if pi_val < 200 and pi_val > 0:
       warnings.append(
