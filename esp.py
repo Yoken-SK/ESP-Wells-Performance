@@ -11,8 +11,8 @@ st.set_page_config(page_title="ESP Well Dashboard", layout="wide")
 
 st.title("⚡ ESP Production & Downhole Monitoring Dashboard")
 st.markdown(
-    "Dashboard otomatis mendeteksi sheet berlabel **'Monitoring'** dari file Excel"
-    " lapangan Anda."
+    "Dashboard otomatis mendeteksi sheet berlabel **'Monitoring'** dari file"
+    " Excel lapangan Anda."
 )
 
 # ==========================================
@@ -122,6 +122,10 @@ if uploaded_file is not None:
         df_clean["PD_PSI"] = find_and_parse_flexible(
             ["pdischarge", "pdp", "discharge", "pdischargepsi", "p.discharge"]
         )
+        df_clean["Motor_Temp_C"] = find_and_parse_flexible(
+            ["motortemp", "mtemp", "temp", "motortempc", "tmotor"],
+            default_val=95.0,
+        )
         df_clean["Frequency_Hz"] = (
             find_and_parse_flexible(
                 ["freqhz", "hz", "freq", "vsd"], default_val=40
@@ -140,6 +144,9 @@ if uploaded_file is not None:
 
         df_clean["PI_PSI"] = df_clean["PI_PSI"].ffill().bfill().fillna(0)
         df_clean["PD_PSI"] = df_clean["PD_PSI"].ffill().bfill().fillna(0)
+        df_clean["Motor_Temp_C"] = (
+            df_clean["Motor_Temp_C"].ffill().bfill().fillna(95.0)
+        )
         df_clean["Oil_Rate_BOPD"] = df_clean["Oil_Rate_BOPD"].fillna(0)
         df_clean["Water_Rate_BWPD"] = df_clean["Water_Rate_BWPD"].fillna(0)
 
@@ -182,7 +189,6 @@ if uploaded_file is not None:
               well_name_derived = row_cells[-1].replace(":", "").strip()
 
         df_clean["Well_Name"] = well_name_derived
-        df_clean["Motor_Temp_C"] = 95.0
         df_clean["Vibration_G"] = 1.2
 
         all_wells_data[well_name_derived] = df_clean.sort_values("Date")
@@ -230,21 +236,13 @@ if all_wells_data:
 
   with col_graph:
     # ==========================================
-    # 4. GRAFIK TREN PRODUKSI DUAL-AXIS
+    # 4. GRAFIK TREN PRODUKSI (KOLOM KIRI)
     # ==========================================
     st.subheader("📈 Grafik Tren Produksi Sumur")
     selected_prod = st.multiselect(
         "Pilih Parameter Produksi:",
-        options=[
-            "Oil Rate (BOPD)",
-            "Water Rate (BWPD)",
-            "Gas Rate (MCFD)",
-        ],
-        default=[
-            "Oil Rate (BOPD)",
-            "Water Rate (BWPD)",
-            "Gas Rate (MCFD)",
-        ],
+        options=["Oil Rate (BOPD)", "Water Rate (BWPD)", "Gas Rate (MCFD)"],
+        default=["Oil Rate (BOPD)", "Water Rate (BWPD)", "Gas Rate (MCFD)"],
     )
 
     fig_prod = go.Figure()
@@ -298,3 +296,74 @@ if all_wells_data:
     )
 
     st.plotly_chart(fig_prod, use_container_width=True)
+
+  with col_anim:
+    # ==========================================
+    # 5. GRAFIK DOWNHOLE MONITORING (KOLOM KANAN)
+    # ==========================================
+    st.subheader("📉 Grafik Downhole Monitoring")
+    selected_dh = st.multiselect(
+        "Pilih Parameter Downhole:",
+        options=[
+            "Pump Intake (PI)",
+            "Pump Discharge (PD)",
+            "Motor Temp (°C)",
+        ],
+        default=[
+            "Pump Intake (PI)",
+            "Pump Discharge (PD)",
+            "Motor Temp (°C)",
+        ],
+    )
+
+    fig_dh = go.Figure()
+
+    if "Pump Intake (PI)" in selected_dh:
+      fig_dh.add_trace(
+          go.Scatter(
+              x=df_well["Date"],
+              y=df_well["PI_PSI"],
+              mode="lines+markers",
+              name="PI (PSI)",
+              line=dict(color="darkorange", width=2.5),
+          )
+      )
+    if "Pump Discharge (PD)" in selected_dh:
+      fig_dh.add_trace(
+          go.Scatter(
+              x=df_well["Date"],
+              y=df_well["PD_PSI"],
+              mode="lines+markers",
+              name="PD (PSI)",
+              line=dict(color="purple", width=2),
+          )
+      )
+    if "Motor Temp (°C)" in selected_dh:
+      fig_dh.add_trace(
+          go.Scatter(
+              x=df_well["Date"],
+              y=df_well["Motor_Temp_C"],
+              mode="lines+markers",
+              name="Motor Temp (°C)",
+              yaxis="y2",
+              line=dict(color="crimson", width=2, dash="dash"),
+          )
+      )
+
+    fig_dh.update_layout(
+        title=f"Tekanan & Temperatur - {selected_well}",
+        xaxis=dict(title="Tanggal"),
+        yaxis=dict(title="Tekanan (PSI)"),
+        yaxis2=dict(
+            title="Temperatur (°C)",
+            overlaying="y",
+            side="right",
+            showgrid=False,
+        ),
+        legend=dict(
+            orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1
+        ),
+        margin=dict(l=40, r=40, t=60, b=40),
+    )
+
+    st.plotly_chart(fig_dh, use_container_width=True)
